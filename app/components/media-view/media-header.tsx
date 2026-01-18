@@ -62,10 +62,10 @@ export function MediaHeader({
     (generalTrack['Duration'] as string);
 
   return (
-    <div className="bg-background/95 supports-backdrop-filter:bg-background/60 sticky top-0 z-50 -mx-4 flex flex-col gap-4 px-4 pt-4 pb-0 backdrop-blur-md transition-all md:-mx-8 md:px-8">
+    <div className="bg-background/95 supports-backdrop-filter:bg-background/60 sticky top-0 z-50 -mx-4 flex flex-col gap-4 px-6 pt-4 pb-0 backdrop-blur-md transition-all md:-mx-8 md:px-10">
       <div className="flex flex-col items-start gap-4">
         {/* Filename and Actions Row */}
-        <div className="flex w-full min-w-0 items-start justify-between gap-4 pl-1">
+        <div className="flex w-full min-w-0 items-start justify-between gap-4">
           <h1 className="text-lg font-bold tracking-tight break-all md:text-2xl">
             {displayFilename}
           </h1>

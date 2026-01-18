@@ -496,9 +496,10 @@ export function FastLinkForm() {
                   {state.mediaResults && (
                     <Accordion type="single" collapsible className="w-full pt-2">
                       <AccordionItem value="details" className="border-t border-b-0 px-1">
-                        <AccordionTrigger className="justify-center py-4 text-xs hover:no-underline text-muted-foreground hover:text-foreground transition-colors">
+
+                        <AccordionTrigger className="group justify-center py-4 text-xs hover:no-underline text-muted-foreground hover:text-foreground transition-colors [&>svg:last-child]:hidden">
                           <span className="flex items-center gap-1.5">
-                            <ChevronDown className="h-3.5 w-3.5" />
+                            <ChevronDown className="group-data-[state=open]:rotate-180 h-3.5 w-3.5 shrink-0 transition-transform duration-200" />
                             View Full Details
                           </span>
                         </AccordionTrigger>
