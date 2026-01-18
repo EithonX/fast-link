@@ -558,10 +558,22 @@ export function FastLinkForm() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t py-4">
-        <p className="text-muted-foreground text-center text-xs">
-          © {new Date().getFullYear()} FastLink
-        </p>
+      <footer className="border-t py-6">
+        <div className="container mx-auto flex flex-row items-center justify-center gap-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground">
+          <span>© {new Date().getFullYear()} FastLink</span>
+          <span>•</span>
+          <span>
+            Made by{' '}
+            <a
+              href="https://github.com/EithonX"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-foreground/80 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+            >
+              Eithon
+            </a>
+          </span>
+        </div>
       </footer>
     </div>
   );
