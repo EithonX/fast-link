@@ -19,7 +19,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { HistorySheet } from '~/components/history-sheet';
 import { MediaView } from '~/components/media-view';
@@ -35,6 +35,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { useHapticFeedback } from '~/hooks/use-haptic';
 import { useHistory, type HistoryItem } from '~/hooks/use-history';
+import { cn } from '~/lib/utils';
 
 import { ModeToggle } from './mode-toggle';
 
@@ -83,13 +84,24 @@ function getHost(url: string): string {
 export function FastLinkForm() {
   const { triggerSuccess, triggerError } = useHapticFeedback();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [inputUrl, setInputUrl] = useState('');
   const [state, setState] = useState<FastLinkState>(initialState);
   const [copied, setCopied] = useState(false);
   const [clipboardUrl, setClipboardUrl] = useState<string | null>(null);
   const { addToHistory } = useHistory();
 
+  const isValidUrl = useMemo(() => {
+    if (!inputUrl) return false;
+    try {
+      const u = new URL(inputUrl);
+      return u.protocol === 'http:' || u.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }, [inputUrl]);
+
   const handleSubmit = async (urlToAnalyze?: string) => {
-    const url = urlToAnalyze || inputRef.current?.value?.trim() || '';
+    const url = urlToAnalyze || inputUrl.trim() || '';
 
     if (!url) {
       setState((s) => ({ ...s, error: 'Please enter a valid URL' }));
@@ -205,8 +217,9 @@ export function FastLinkForm() {
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      if (text && inputRef.current) {
-        inputRef.current.value = text;
+      if (text) {
+        setInputUrl(text);
+        if (inputRef.current) inputRef.current.value = text;
         triggerSuccess();
       }
     } catch {
@@ -289,6 +302,7 @@ export function FastLinkForm() {
     if (inputRef.current) {
       inputRef.current.value = item.url;
     }
+    setInputUrl(item.url);
 
     triggerSuccess();
     fetchMediaInfo(item.url);
@@ -371,11 +385,18 @@ export function FastLinkForm() {
                   ref={inputRef}
                   name="url"
                   type="url"
+                  value={inputUrl}
+                  onChange={(e) => setInputUrl(e.target.value)}
                   placeholder="https://example.com/file.mp4"
                   autoComplete="off"
                   required
                   onFocus={checkClipboard}
-                  className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-11 w-full rounded-lg border px-4 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  className={cn(
+                    'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-11 w-full rounded-lg border px-4 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
+                    inputUrl &&
+                      !isValidUrl &&
+                      'border-destructive focus-visible:ring-destructive'
+                  )}
                 />
               </div>
               <Button
@@ -391,7 +412,7 @@ export function FastLinkForm() {
                 type="submit"
                 size="icon"
                 className="h-11 w-11 shrink-0"
-                disabled={state.isGenerating}
+                disabled={state.isGenerating || (!!inputUrl && !isValidUrl)}
               >
                 {state.isGenerating ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -559,32 +580,38 @@ export function FastLinkForm() {
 
       {/* Footer */}
       <footer className="border-t py-6">
-        <div className="container mx-auto flex flex-row flex-wrap items-center justify-center gap-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground">
-          <span>© {new Date().getFullYear()} FastLink</span>
-          <span>•</span>
-          <span>
-            Made by{' '}
-            <a
-              href="https://github.com/EithonX"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-foreground/80 hover:text-foreground hover:underline underline-offset-4 transition-colors"
-            >
-              Eithon
-            </a>
-          </span>
-          <span>•</span>
-          <span>
-            Inspired by{' '}
-            <a
-              href="https://github.com/luminalreason/mediapeek/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-foreground/80 hover:text-foreground hover:underline underline-offset-4 transition-colors"
-            >
-              MediaPeek
-            </a>
-          </span>
+        <div className="container mx-auto flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground sm:flex-row sm:gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <span>© {new Date().getFullYear()} FastLink</span>
+            <span>•</span>
+            <span>
+              Made by{' '}
+              <a
+                href="https://github.com/EithonX"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground/80 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+              >
+                Eithon
+              </a>
+            </span>
+          </div>
+
+          <span className="hidden sm:inline">•</span>
+
+          <div className="flex items-center gap-1.5">
+            <span>
+              Inspired by{' '}
+              <a
+                href="https://github.com/luminalreason/mediapeek/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground/80 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+              >
+                MediaPeek
+              </a>
+            </span>
+          </div>
         </div>
       </footer>
     </div>
