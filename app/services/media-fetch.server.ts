@@ -23,7 +23,7 @@ export interface MediaFetchResult {
 
 export async function fetchMediaChunk(
   initialUrl: string,
-  chunkSize: number = 10 * 1024 * 1024,
+  chunkSize: number = 2 * 1024 * 1024, // 2MB - enough for container headers/metadata
 ): Promise<MediaFetchResult> {
   const tStart = performance.now();
   const diagnostics: Partial<FetchDiagnostics> = {};
