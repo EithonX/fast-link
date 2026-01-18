@@ -559,7 +559,7 @@ export function FastLinkForm() {
 
       {/* Footer */}
       <footer className="border-t py-6">
-        <div className="container mx-auto flex flex-row items-center justify-center gap-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground">
+        <div className="container mx-auto flex flex-row flex-wrap items-center justify-center gap-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground">
           <span>© {new Date().getFullYear()} FastLink</span>
           <span>•</span>
           <span>
@@ -571,6 +571,18 @@ export function FastLinkForm() {
               className="font-medium text-foreground/80 hover:text-foreground hover:underline underline-offset-4 transition-colors"
             >
               Eithon
+            </a>
+          </span>
+          <span>•</span>
+          <span>
+            Inspired by{' '}
+            <a
+              href="https://github.com/luminalreason/mediapeek/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-foreground/80 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+            >
+              MediaPeek
             </a>
           </span>
         </div>
