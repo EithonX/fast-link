@@ -6,6 +6,7 @@ export interface HistoryItem {
   fastLink: string;
   filename: string;
   fileSize?: string;
+  sizeBytes?: number;
   timestamp: number;
   mediaSummary?: string[]; // e.g. ["1080p", "HEVC"]
 }

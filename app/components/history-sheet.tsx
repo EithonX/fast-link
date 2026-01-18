@@ -1,10 +1,9 @@
-'use client';
-
 import {
   Clock,
   Copy,
   ExternalLink,
   History as HistoryIcon,
+  RotateCcw,
   Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -35,7 +34,11 @@ function timeAgo(date: number) {
   return new Date(date).toLocaleDateString();
 }
 
-export function HistorySheet() {
+interface HistorySheetProps {
+  onSelect?: (item: HistoryItem) => void;
+}
+
+export function HistorySheet({ onSelect }: HistorySheetProps) {
   const { history, removeFromHistory, clearHistory } = useHistory();
   const [open, setOpen] = useState(false);
 
@@ -118,6 +121,20 @@ export function HistorySheet() {
                   <Separator />
 
                   <div className="flex items-center gap-2 pt-1">
+                    {onSelect && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-8 flex-1 gap-1.5 text-xs"
+                        onClick={() => {
+                          onSelect(item);
+                          setOpen(false);
+                        }}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Restore
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -125,7 +142,7 @@ export function HistorySheet() {
                       onClick={() => copyToClipboard(item.fastLink)}
                     >
                       <Copy className="h-3.5 w-3.5" />
-                      Copy Link
+                      Copy
                     </Button>
                     <Button
                       variant="outline"

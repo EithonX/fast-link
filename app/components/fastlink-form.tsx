@@ -34,7 +34,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { useHapticFeedback } from '~/hooks/use-haptic';
-import { useHistory } from '~/hooks/use-history';
+import { useHistory, type HistoryItem } from '~/hooks/use-history';
 
 import { ModeToggle } from './mode-toggle';
 
@@ -116,6 +116,8 @@ export function FastLinkForm() {
       url,
     });
 
+
+
     try {
       const infoResponse = await fetch(`/info?url=${encodeURIComponent(url)}`);
       const infoData = (await infoResponse.json()) as FileInfo & {
@@ -151,6 +153,7 @@ export function FastLinkForm() {
         fastLink: fastLink,
         filename: infoData.filename,
         fileSize: formatFileSize(infoData.size),
+        sizeBytes: infoData.size,
       });
 
       triggerSuccess();
@@ -268,6 +271,29 @@ export function FastLinkForm() {
 
   const mediaSummary = getMediaSummary();
 
+  const handleRestore = (item: HistoryItem) => {
+    setState({
+      ...initialState,
+      url: item.url,
+      fastLink: item.fastLink,
+      fileInfo: {
+        filename: item.filename,
+        size: item.sizeBytes || 0,
+        type: 'unknown',
+      },
+      isGenerating: false,
+      isAnalyzing: true, // Re-trigger analysis
+      mediaResults: null,
+    });
+
+    if (inputRef.current) {
+      inputRef.current.value = item.url;
+    }
+
+    triggerSuccess();
+    fetchMediaInfo(item.url);
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* Header */}
@@ -280,7 +306,7 @@ export function FastLinkForm() {
             <span className="text-lg font-bold">FastLink</span>
           </div>
           <div className="flex items-center gap-2">
-            <HistorySheet />
+            <HistorySheet onSelect={handleRestore} />
             <ModeToggle />
           </div>
         </div>
