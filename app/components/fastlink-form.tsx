@@ -21,6 +21,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { useRef, useState } from 'react';
 
+import { HistorySheet } from '~/components/history-sheet';
 import { MediaView } from '~/components/media-view';
 import {
   Accordion,
@@ -33,6 +34,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { useHapticFeedback } from '~/hooks/use-haptic';
+import { useHistory } from '~/hooks/use-history';
 
 import { ModeToggle } from './mode-toggle';
 
@@ -84,6 +86,7 @@ export function FastLinkForm() {
   const [state, setState] = useState<FastLinkState>(initialState);
   const [copied, setCopied] = useState(false);
   const [clipboardUrl, setClipboardUrl] = useState<string | null>(null);
+  const { addToHistory } = useHistory();
 
   const handleSubmit = async (urlToAnalyze?: string) => {
     const url = urlToAnalyze || inputRef.current?.value?.trim() || '';
@@ -142,6 +145,13 @@ export function FastLinkForm() {
         isGenerating: false,
         isAnalyzing: true,
       }));
+
+      addToHistory({
+        url: url,
+        fastLink: fastLink,
+        filename: infoData.filename,
+        fileSize: formatFileSize(infoData.size),
+      });
 
       triggerSuccess();
       fetchMediaInfo(url);
@@ -269,7 +279,10 @@ export function FastLinkForm() {
             </div>
             <span className="text-lg font-bold">FastLink</span>
           </div>
-          <ModeToggle />
+          <div className="flex items-center gap-2">
+            <HistorySheet />
+            <ModeToggle />
+          </div>
         </div>
       </header>
 
