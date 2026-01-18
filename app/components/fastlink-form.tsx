@@ -364,19 +364,24 @@ export function FastLinkForm() {
                   <button
                     type="button"
                     onClick={() => {
+                      setInputUrl(clipboardUrl);
                       if (inputRef.current) {
                         inputRef.current.value = clipboardUrl;
                       }
                       handleSubmit(clipboardUrl);
                       setClipboardUrl(null);
                     }}
-                    className="bg-muted/50 hover:bg-muted group flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors"
+                    className="hover:bg-muted/50 group flex w-full max-w-full cursor-pointer flex-col items-start gap-1 rounded-xl border px-4 py-3 text-left transition-colors"
                   >
-                    <ClipboardIcon className="text-muted-foreground h-4 w-4 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {clipboardUrl}
+                    <span className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+                      Link from Clipboard
                     </span>
-                    <ArrowRight className="text-muted-foreground group-hover:text-foreground h-4 w-4 shrink-0" />
+                    <div className="flex w-full items-center justify-between gap-2">
+                      <span className="line-clamp-2 break-all text-sm font-medium">
+                        {clipboardUrl}
+                      </span>
+                      <ArrowRight className="text-muted-foreground group-hover:text-foreground h-4 w-4 shrink-0 -rotate-45 transition-colors group-hover:rotate-0" />
+                    </div>
                   </button>
                 </motion.div>
               )}

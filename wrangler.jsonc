@@ -4,7 +4,7 @@
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "fastlink",
+  "name": "dl",
   "compatibility_date": "2025-04-04",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./workers/app.ts",
@@ -13,7 +13,7 @@
     "TURNSTILE_SITE_KEY": "0x4AAAAAACLSwN-VBqB6mZ1u",
     "ENABLE_TURNSTILE": "false",
     "WORKER_BASE_URL": "",
-    "SESSION_SECRET": "fastlink-dev-secret-change-in-production"
+    "SESSION_SECRET": "dl-dev-secret-change-in-production"
   },
   "observability": {
     "enabled": true,
