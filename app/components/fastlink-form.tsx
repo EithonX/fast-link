@@ -313,12 +313,16 @@ export function FastLinkForm() {
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
+          <a
+            href="/"
+            className="flex items-center gap-2 transition-opacity hover:opacity-80"
+            title="Refresh FastLink"
+          >
             <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg">
               <Zap className="text-primary-foreground h-4 w-4" />
             </div>
             <span className="text-lg font-bold">FastLink</span>
-          </div>
+          </a>
           <div className="flex items-center gap-2">
             <HistorySheet onSelect={handleRestore} />
             <ModeToggle />
