@@ -63,11 +63,30 @@ export function MediaHeader({
 
   return (
     <div className="bg-background/95 supports-backdrop-filter:bg-background/60 sticky top-0 z-50 -mx-4 flex flex-col gap-4 px-4 pt-4 pb-0 backdrop-blur-md transition-all md:-mx-8 md:px-8">
-      <div className="flex flex-col items-start gap-2 md:gap-4">
-        <h1 className="text-lg font-bold tracking-tight break-all md:text-2xl">
-          {displayFilename}
-        </h1>
-        <div className="text-muted-foreground flex w-full flex-wrap items-center gap-4 text-sm">
+      <div className="flex flex-col items-start gap-4">
+        {/* Filename and Actions Row */}
+        <div className="flex w-full min-w-0 items-start justify-between gap-4 pl-1">
+          <h1 className="text-lg font-bold tracking-tight break-all md:text-2xl">
+            {displayFilename}
+          </h1>
+          
+          {/* Options Menu - Fixed Position */}
+          <div className="shrink-0 pt-1">
+            <OptionsMenu
+              data={rawData}
+              url={url}
+              filename={displayFilename}
+              isTextView={isTextView}
+              setIsTextView={setIsTextView}
+              showOriginalTitles={showOriginalTitles}
+              setShowOriginalTitles={setShowOriginalTitles}
+              onShareSuccess={setPrivateBinUrl}
+            />
+          </div>
+        </div>
+
+        {/* Metadata and Icons Row */}
+        <div className="text-muted-foreground flex w-full flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           {duration && <span>{duration}</span>}
           {fileSize && (
             <>
@@ -76,31 +95,18 @@ export function MediaHeader({
             </>
           )}
 
-          {/* Icons & Options */}
-          <div className="border-border flex flex-wrap items-center gap-3 sm:flex-1 sm:border-l sm:pl-4">
-            {headerIcons.length > 0 &&
-              headerIcons.map((icon) => (
+          {/* Media Badges */}
+          {headerIcons.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 sm:border-l sm:border-border sm:pl-4">
+              {headerIcons.map((icon) => (
                 <MediaIcon
                   key={icon}
                   name={icon}
                   className="h-5 opacity-90 transition-opacity hover:opacity-100"
                 />
               ))}
-
-            {/* Actions */}
-            <div className="ml-auto flex items-center gap-2">
-              <OptionsMenu
-                data={rawData}
-                url={url}
-                filename={displayFilename}
-                isTextView={isTextView}
-                setIsTextView={setIsTextView}
-                showOriginalTitles={showOriginalTitles}
-                setShowOriginalTitles={setShowOriginalTitles}
-                onShareSuccess={setPrivateBinUrl}
-              />
             </div>
-          </div>
+          )}
         </div>
       </div>
       <Separator />

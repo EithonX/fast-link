@@ -262,7 +262,7 @@ export function FastLinkForm() {
     <div className="flex min-h-screen flex-col">
       {/* Header */}
       <header className="border-b">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
+        <div className="container mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg">
               <Zap className="text-primary-foreground h-4 w-4" />
@@ -274,8 +274,8 @@ export function FastLinkForm() {
       </header>
 
       {/* Main Content */}
-      <main className="flex flex-1 flex-col items-center px-4 py-8">
-        <div className="w-full max-w-xl space-y-6">
+      <main className="container mx-auto flex flex-1 flex-col items-center px-4 py-8">
+        <div className="w-full max-w-3xl space-y-8">
           {/* Hero */}
           <div className="space-y-2 text-center">
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
@@ -292,7 +292,7 @@ export function FastLinkForm() {
               e.preventDefault();
               handleSubmit();
             }}
-            className="space-y-4"
+            className="mx-auto max-w-xl space-y-4"
           >
             {/* Clipboard Suggestion */}
             <AnimatePresence>
@@ -365,7 +365,7 @@ export function FastLinkForm() {
 
           {/* Error */}
           {state.error && !state.isGenerating && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="mx-auto max-w-xl">
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>{state.error}</AlertDescription>
             </Alert>
@@ -373,7 +373,7 @@ export function FastLinkForm() {
 
           {/* Loading */}
           {state.isGenerating && (
-            <Card>
+            <Card className="mx-auto max-w-xl">
               <CardContent className="space-y-4 pt-6">
                 <div className="bg-muted h-12 animate-pulse rounded-lg" />
                 <div className="flex gap-2">
@@ -421,33 +421,33 @@ export function FastLinkForm() {
                   </div>
 
                   {/* Fast Link */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <div className="space-y-3 pt-2">
+                    <div className="flex flex-col items-center gap-1.5 text-xs font-medium text-muted-foreground sm:flex-row sm:justify-center">
                       <Link2 className="h-3 w-3" />
                       Fast Link
                     </div>
-                    <div className="bg-muted rounded-lg border p-2.5">
-                      <code className="block truncate text-xs">
+                    <div className="bg-muted mx-auto max-w-lg rounded-lg border p-3 text-center">
+                      <code className="block truncate text-xs sm:text-sm">
                         {state.fastLink}
                       </code>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap justify-center gap-3 pt-1">
                       <Button
                         variant={copied ? 'default' : 'secondary'}
                         size="sm"
                         onClick={copyToClipboard}
-                        className="flex-1 gap-1.5 text-xs sm:flex-none"
+                        className="flex-1 gap-2 text-xs sm:flex-none sm:min-w-[100px]"
                       >
-                        {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                         {copied ? 'Copied!' : 'Copy'}
                       </Button>
                       <Button
                         variant="secondary"
                         size="sm"
                         onClick={() => window.open(state.fastLink, '_blank')}
-                        className="flex-1 gap-1.5 text-xs sm:flex-none"
+                        className="flex-1 gap-2 text-xs sm:flex-none sm:min-w-[120px]"
                       >
-                        <Download className="h-3 w-3" />
+                        <Download className="h-3.5 w-3.5" />
                         Download
                       </Button>
                       <Button
@@ -461,9 +461,9 @@ export function FastLinkForm() {
                             encodeURIComponent(state.fileInfo?.filename || 'file');
                           window.open(viewerUrl, '_blank');
                         }}
-                        className="flex-1 gap-1.5 text-xs sm:flex-none"
+                        className="flex-1 gap-2 text-xs sm:flex-none sm:min-w-[100px]"
                       >
-                        <ExternalLink className="h-3 w-3" />
+                        <ExternalLink className="h-3.5 w-3.5" />
                         Preview
                       </Button>
                     </div>
@@ -471,19 +471,19 @@ export function FastLinkForm() {
 
                   {/* Media Summary */}
                   {state.isAnalyzing ? (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="flex justify-center items-center gap-2 pt-2 text-xs text-muted-foreground">
                       <Loader2 className="h-3 w-3 animate-spin" />
                       Analyzing media...
                     </div>
                   ) : mediaSummary ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <div className="space-y-3 pt-2">
+                      <div className="flex flex-col items-center gap-1.5 text-xs font-medium text-muted-foreground sm:flex-row sm:justify-center">
                         <Info className="h-3 w-3" />
                         Media Info
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap justify-center gap-2">
                         {mediaSummary.map((item) => (
-                          <Badge key={item.label} variant="outline" className="gap-1 text-[10px] px-2 py-0.5">
+                          <Badge key={item.label} variant="outline" className="gap-1.5 px-2.5 py-1 text-xs">
                             <span className="text-muted-foreground">{item.label}:</span>
                             <span className="font-medium">{item.value}</span>
                           </Badge>
@@ -494,11 +494,11 @@ export function FastLinkForm() {
 
                   {/* Full Details */}
                   {state.mediaResults && (
-                    <Accordion type="single" collapsible className="w-full">
-                      <AccordionItem value="details" className="border-t border-b-0">
-                        <AccordionTrigger className="py-2 text-xs hover:no-underline">
+                    <Accordion type="single" collapsible className="w-full pt-2">
+                      <AccordionItem value="details" className="border-t border-b-0 px-1">
+                        <AccordionTrigger className="justify-center py-4 text-xs hover:no-underline text-muted-foreground hover:text-foreground transition-colors">
                           <span className="flex items-center gap-1.5">
-                            <ChevronDown className="h-3 w-3" />
+                            <ChevronDown className="h-3.5 w-3.5" />
                             View Full Details
                           </span>
                         </AccordionTrigger>
