@@ -16,6 +16,7 @@ import {
   Loader2,
   Moon,
   Sun,
+  X,
   Zap,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -401,12 +402,29 @@ export function FastLinkForm() {
                   required
                   onFocus={checkClipboard}
                   className={cn(
-                    'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-11 w-full rounded-lg border px-4 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
+                    'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-11 w-full rounded-lg border px-4 pr-10 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
                     inputUrl &&
                       !isValidUrl &&
                       'border-destructive focus-visible:ring-destructive'
                   )}
                 />
+                {inputUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInputUrl('');
+                      setState(initialState);
+                      if (inputRef.current) {
+                        inputRef.current.value = '';
+                        inputRef.current.focus();
+                      }
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-sm hover:bg-muted"
+                    title="Clear URL"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
               <Button
                 type="button"
@@ -495,8 +513,8 @@ export function FastLinkForm() {
                       <Link2 className="h-3 w-3" />
                       Fast Link
                     </div>
-                    <div className="bg-muted mx-auto max-w-lg rounded-lg border p-3 text-center">
-                      <code className="block truncate text-xs sm:text-sm">
+                    <div className="bg-muted mx-auto max-w-lg rounded-lg border p-3 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none]">
+                      <code className="block whitespace-nowrap text-xs sm:text-sm select-all">
                         {state.fastLink}
                       </code>
                     </div>

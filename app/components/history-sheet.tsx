@@ -57,9 +57,9 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
       </SheetTrigger>
       <SheetContent className="flex h-full w-full flex-col sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Request History</SheetTitle>
+          <SheetTitle>History</SheetTitle>
           <SheetDescription>
-            Your recently generated download links.
+            Your recent downloads.
           </SheetDescription>
         </SheetHeader>
 

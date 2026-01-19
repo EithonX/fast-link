@@ -45,40 +45,77 @@ export async function getFileInfo(targetUrl: string): Promise<FileInfo> {
   const headers = getEmulationHeaders();
 
   let response: Response | undefined;
+  let finalUrl = targetUrl; // Track the final URL after redirects
+  
+  let contentLength = '';
+  let contentDisposition = '';
+  let contentType = '';
+  
+  // First try: HEAD request to original URL (follows redirects)
   try {
     response = await fetch(targetUrl, {
       method: 'HEAD',
       headers,
       redirect: 'follow',
     });
+    // Get the final URL after redirects
+    if (response?.url) {
+      finalUrl = response.url;
+    }
+    if (response?.ok) {
+      contentLength = response.headers.get('content-length') || '';
+      contentDisposition = response.headers.get('content-disposition') || '';
+      contentType = response.headers.get('content-type') || '';
+      
+      // Try content-range for size
+      const cr = response.headers.get('content-range');
+      const totalMatch = cr?.match(/\/(\d+)\s*$/);
+      if (totalMatch && !contentLength) contentLength = totalMatch[1];
+    }
   } catch {
     // Ignore, will try fallback
   }
 
-  let contentLength = response?.headers?.get('content-length');
-  let contentDisposition = response?.headers?.get('content-disposition');
-  let contentType = response?.headers?.get('content-type') || '';
-  let filename = '';
-
-  // If HEAD failed or missing headers, try a tiny GET with Range: bytes=0-0
-  if (
-    !response ||
-    (!response.ok && response.status !== 405) ||
-    (!contentLength && !contentType)
-  ) {
+  // Second try: If still missing size/type and we have a different final URL, try HEAD on that
+  if (finalUrl !== targetUrl && (!contentLength || !contentType)) {
     try {
-      const getResp = await fetch(targetUrl, {
+      const finalResp = await fetch(finalUrl, {
+        method: 'HEAD',
+        headers,
+        redirect: 'manual', // Don't follow further redirects
+      });
+      if (finalResp?.ok) {
+        contentLength = contentLength || finalResp.headers.get('content-length') || '';
+        contentDisposition = contentDisposition || finalResp.headers.get('content-disposition') || '';
+        contentType = contentType || finalResp.headers.get('content-type') || '';
+        
+        const cr = finalResp.headers.get('content-range');
+        const totalMatch = cr?.match(/\/(\d+)\s*$/);
+        if (totalMatch && !contentLength) contentLength = totalMatch[1];
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Third try: If still missing, try a Range GET request
+  if (!contentLength || !contentType) {
+    try {
+      const getResp = await fetch(finalUrl || targetUrl, {
         method: 'GET',
         headers: getEmulationHeaders('bytes=0-0'),
         redirect: 'follow',
       });
-      if (getResp.ok) {
-        contentLength = contentLength || getResp.headers.get('content-length');
-        contentDisposition =
-          contentDisposition || getResp.headers.get('content-disposition');
+      if (getResp.ok || getResp.status === 206) {
+        // Update final URL from GET response as well
+        if (getResp.url) {
+          finalUrl = getResp.url;
+        }
+        contentLength = contentLength || getResp.headers.get('content-length') || '';
+        contentDisposition = contentDisposition || getResp.headers.get('content-disposition') || '';
         contentType = contentType || getResp.headers.get('content-type') || '';
 
-        // Try content-range total
+        // Try content-range total - this is often the most reliable for size
         const cr = getResp.headers.get('content-range');
         const totalMatch = cr?.match(/\/(\d+)\s*$/);
         if (totalMatch) contentLength = totalMatch[1];
@@ -89,9 +126,22 @@ export async function getFileInfo(targetUrl: string): Promise<FileInfo> {
   }
 
   // Extract filename from Content-Disposition
-  filename = extractFilename(contentDisposition ?? null);
+  let filename = extractFilename(contentDisposition || null);
 
-  // Fallback to URL path
+  // Fallback to final URL path (after redirects)
+  if (!filename) {
+    try {
+      const parsedUrl = new URL(finalUrl);
+      const pathPart = parsedUrl.pathname.substring(
+        parsedUrl.pathname.lastIndexOf('/') + 1,
+      );
+      if (pathPart) filename = decodeURIComponent(pathPart);
+    } catch {
+      // Ignore
+    }
+  }
+
+  // If still no filename, try the original URL as last resort
   if (!filename) {
     try {
       const parsedUrl = new URL(targetUrl);
@@ -101,6 +151,33 @@ export async function getFileInfo(targetUrl: string): Promise<FileInfo> {
       if (pathPart) filename = decodeURIComponent(pathPart);
     } catch {
       // Ignore
+    }
+  }
+
+  // Try to infer content type from filename extension if still missing
+  if (!contentType && filename) {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      'mp4': 'video/mp4',
+      'mkv': 'video/x-matroska',
+      'webm': 'video/webm',
+      'avi': 'video/x-msvideo',
+      'mov': 'video/quicktime',
+      'mp3': 'audio/mpeg',
+      'flac': 'audio/flac',
+      'wav': 'audio/wav',
+      'zip': 'application/zip',
+      'rar': 'application/x-rar-compressed',
+      '7z': 'application/x-7z-compressed',
+      'pdf': 'application/pdf',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+    };
+    if (ext && mimeTypes[ext]) {
+      contentType = mimeTypes[ext];
     }
   }
 

@@ -136,12 +136,21 @@ async function handleProxyRoute(
 
     const responseHeaders = new Headers(response.headers);
 
-    // Always set Content-Disposition for download
+    // Set appropriate Content-Disposition based on streaming vs download
+    // For streaming (when accessed directly by players), prefer inline to avoid download prompts
     if (filename) {
+      // Check if this is a streaming request (Range header present) - use inline for better player compatibility
+      const isStreamingRequest = !!range;
+      const disposition = isStreamingRequest ? 'inline' : 'attachment';
       responseHeaders.set(
         'Content-Disposition',
-        `attachment; filename="${filename.replace(/"/g, '\\"')}"`,
+        `${disposition}; filename="${filename.replace(/"/g, '\\"')}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       );
+    }
+
+    // Ensure Accept-Ranges is set for media player seeking support
+    if (!responseHeaders.has('Accept-Ranges')) {
+      responseHeaders.set('Accept-Ranges', 'bytes');
     }
 
     // Add CORS headers
@@ -149,6 +158,11 @@ async function handleProxyRoute(
       responseHeaders.set(key, value);
     });
     responseHeaders.set('X-Proxy-Service', 'Cloudflare-Worker-FastLink');
+    
+    // Add Cache-Control for efficient streaming (allows caching of video segments)
+    if (!responseHeaders.has('Cache-Control')) {
+      responseHeaders.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    }
 
     // Handle range responses
     let status = response.status;
