@@ -312,7 +312,7 @@ export function FastLinkForm() {
   return (
     <div className="flex min-h-screen flex-col">
       {/* Header */}
-      <header className="border-b">
+      <header className="sticky top-0 z-[60] w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <a
             href="/"
