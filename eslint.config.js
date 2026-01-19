@@ -8,7 +8,7 @@ import tseslint from 'typescript-eslint';
 
 export default [
   { files: ['**/*.{js,mjs,cjs,ts,jsx,tsx}'] },
-  { ignores: ['build/', 'dist/', '.wrangler/', '.react-router/'] },
+  { ignores: ['build/', 'dist/', '.wrangler/', '.react-router/', 'worker-configuration.d.ts'] },
   {
     languageOptions: {
       globals: {

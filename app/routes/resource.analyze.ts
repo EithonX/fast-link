@@ -13,7 +13,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const requestId = request.headers.get('cf-ray') || crypto.randomUUID();
 
   // Initialize Wide Event Context
-  // We use UPPER_SNAKE_CASE for status enums in context as per Google Style Guide recommendation for constants
+  // We use UPPER_SNAKE_CASE for status enums in context
   const logCtx: Record<string, unknown> = {
     params: Object.fromEntries(url.searchParams),
   };
@@ -134,14 +134,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     const errorMessage =
       error instanceof Error ? error.message : 'An unexpected error occurred.';
 
-    // Google Style Guide Error Object Structure
+    // Error Object Structure
     const errorObj = {
       code: 500,
       message: errorMessage,
       details: error instanceof Error ? error.stack : String(error),
     };
 
-    // We attach the error to the log event context
     logCtx.error = errorObj;
 
     return Response.json({ error: errorMessage, requestId }, { status: 500 });
