@@ -76,95 +76,97 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
             </div>
           </div>
         ) : (
-          <ScrollArea className="flex-1 -mx-6 px-6">
-            <div className="flex flex-col gap-4 py-4">
-              {history.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-muted/30 hover:bg-muted/50 group relative flex flex-col gap-3 rounded-lg border p-4 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="grid gap-1">
-                      <h4 className="font-semibold leading-none break-all pr-8">
-                        {item.filename}
-                      </h4>
-                      <p className="text-muted-foreground text-xs">
-                        {timeAgo(item.timestamp)}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive absolute top-2 right-2 h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
-                      onClick={() => removeFromHistory(item.id)}
-                      title="Remove from history"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  {/* Summary Badges if available */}
-                  {item.mediaSummary && item.mediaSummary.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {item.mediaSummary.map((badge, idx) => (
-                        <Badge
-                          key={idx}
-                          variant="secondary"
-                          className="text-[10px] px-1.5 py-0"
-                        >
-                          {badge}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  <Separator />
-
-                  <div className="flex items-center gap-2 pt-1">
-                    {onSelect && (
+          <div className="flex-1 min-h-0 overflow-hidden -mx-6">
+            <ScrollArea className="h-full px-6">
+              <div className="flex flex-col gap-4 py-4">
+                {history.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-muted/30 hover:bg-muted/50 group relative flex flex-col gap-3 rounded-lg border p-4 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="grid gap-1">
+                        <h4 className="font-semibold leading-none break-all pr-8">
+                          {item.filename}
+                        </h4>
+                        <p className="text-muted-foreground text-xs">
+                          {timeAgo(item.timestamp)}
+                        </p>
+                      </div>
                       <Button
-                        variant="default"
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive absolute top-2 right-2 h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={() => removeFromHistory(item.id)}
+                        title="Remove from history"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Summary Badges if available */}
+                    {item.mediaSummary && item.mediaSummary.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {item.mediaSummary.map((badge, idx) => (
+                          <Badge
+                            key={idx}
+                            variant="secondary"
+                            className="text-[10px] px-1.5 py-0"
+                          >
+                            {badge}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
+                    <Separator />
+
+                    <div className="flex items-center gap-2 pt-1">
+                      {onSelect && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="h-8 flex-1 gap-1.5 text-xs"
+                          onClick={() => {
+                            onSelect(item);
+                            setOpen(false);
+                          }}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Restore
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 flex-1 gap-1.5 text-xs"
+                        onClick={() => copyToClipboard(item.fastLink)}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </Button>
+                      <Button
+                        variant="outline"
                         size="sm"
                         className="h-8 flex-1 gap-1.5 text-xs"
                         onClick={() => {
-                          onSelect(item);
-                          setOpen(false);
+                          const viewerUrl =
+                            '/view/' +
+                            encodeURIComponent(btoa(item.url)) +
+                            '/' +
+                            encodeURIComponent(item.filename);
+                          window.open(viewerUrl, '_blank');
                         }}
                       >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Restore
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Preview
                       </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 flex-1 gap-1.5 text-xs"
-                      onClick={() => copyToClipboard(item.fastLink)}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 flex-1 gap-1.5 text-xs"
-                      onClick={() => {
-                        const viewerUrl =
-                          '/view/' +
-                          encodeURIComponent(btoa(item.url)) +
-                          '/' +
-                          encodeURIComponent(item.filename);
-                        window.open(viewerUrl, '_blank');
-                      }}
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Preview
-                    </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
         )}
 
         {history.length > 0 && (
