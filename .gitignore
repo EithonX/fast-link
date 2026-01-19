@@ -35,3 +35,4 @@ worker-configuration.d.ts
 # Editor
 .idea/
 # We keep .vscode tracked for shared settings
+commit.txt

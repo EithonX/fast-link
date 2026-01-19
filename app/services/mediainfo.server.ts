@@ -1,4 +1,4 @@
-import MediaInfoFactory from '~/lib/mediaInfoFactory';
+import { createMediaInfo, type MediaInfo } from '~/services/mediainfo-factory.server';
 
 export interface MediaInfoResult {
   [key: string]: string;
@@ -70,36 +70,15 @@ export async function analyzeMediaBuffer(
     formatsToGenerate.push({ type: 'object', key: 'json' });
   }
 
-  let infoInstance;
+  let infoInstance: MediaInfo | undefined;
   try {
-    // Initialize MediaInfo once
-    // Use the first requested format as initial, or fallback to JSON
-    const initialFormat = formatsToGenerate[0]?.type || 'object';
-
-    let wasmModule;
-    const tWasm = performance.now();
-    try {
-      // @ts-expect-error - Missing types for WASM import
-      const imported = await import('../wasm/MediaInfoModule.wasm');
-      wasmModule = imported.default;
-    } catch (err) {
-      diagnostics.wasmLoadError =
-        err instanceof Error ? err.message : String(err);
-    }
-    diagnostics.wasmLoadTimeMs = Math.round(performance.now() - tWasm);
-
     const tFactory = performance.now();
-    infoInstance = await MediaInfoFactory({
-      format:
-        initialFormat === 'Text'
-          ? 'text'
-          : (initialFormat as 'object' | 'XML' | 'HTML' | 'text'),
-      coverData: false,
-      full: false, // Initial setting, will be overridden in the loop
-      chunkSize: 5 * 1024 * 1024,
-      wasmModule,
-      locateFile: () => 'ignored',
-    });
+    infoInstance = await createMediaInfo();
+
+    // Set initial options (defaults for subsequent loops)
+    infoInstance.options.chunkSize = 5 * 1024 * 1024;
+    infoInstance.options.coverData = false;
+
     diagnostics.factoryCreateTimeMs = Math.round(performance.now() - tFactory);
 
     for (const { type, key } of formatsToGenerate) {
@@ -133,9 +112,12 @@ export async function analyzeMediaBuffer(
             const json = resultData;
 
             if (json && json.media && json.media.track) {
+
+              /* eslint-disable @typescript-eslint/no-explicit-any */
               const generalTrack = json.media.track.find(
-                (t: Record<string, unknown>) => t['@type'] === 'General',
-              );
+                (t: any) => t['@type'] === 'General',
+              ) as any;
+              /* eslint-enable @typescript-eslint/no-explicit-any */
               if (generalTrack) {
                 if (
                   !generalTrack['CompleteName'] &&
