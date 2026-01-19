@@ -4,6 +4,14 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
+// @ts-ignore - ws types might be missing
+import { WebSocket } from 'ws';
+
+if (typeof globalThis.WebSocket === 'undefined') {
+  // @ts-ignore - Polyfill WebSocket
+  globalThis.WebSocket = WebSocket;
+}
+
 export default defineConfig({
   build: {
     target: 'esnext',
