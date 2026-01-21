@@ -2,7 +2,11 @@
 // @ts-nocheck
 /* eslint-disable */
 function isError(error) {
-  return error !== null && typeof error === 'object' && Object.prototype.hasOwnProperty.call(error, 'message');
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    Object.prototype.hasOwnProperty.call(error, 'message')
+  );
 }
 function unknownToError(error) {
   if (isError(error)) {
@@ -38,7 +42,7 @@ const DEFAULT_OPTIONS = {
   coverData: false,
   chunkSize: 256 * 1024,
   format: 'object',
-  full: false
+  full: true,
 };
 
 class MediaInfo {
