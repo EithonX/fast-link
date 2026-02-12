@@ -1,10 +1,5 @@
-export interface PrivateBinResponse {
-  status: number;
-  id: string;
-  url: string;
-  deletetoken: string;
-  message?: string;
-}
+import { PrivateBinResponseSchema } from '~/lib/schemas/privatebin';
+import type { PrivateBinResponse } from '~/lib/schemas/privatebin';
 
 const privateBinHost = 'https://privatebin.net';
 
@@ -119,7 +114,7 @@ export async function uploadToPrivateBin(
     );
   }
 
-  const result = (await response.json()) as PrivateBinResponse;
+  const result: PrivateBinResponse = PrivateBinResponseSchema.parse(await response.json());
 
   if (result.status !== 0) {
     console.error(

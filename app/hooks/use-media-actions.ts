@@ -34,7 +34,7 @@ export function useMediaActions({ data, url }: UseMediaActionsProps) {
           content = json.results?.[format];
           if (!content) throw new Error('No content returned');
 
-          fetchedData.current[format] = content as string;
+          fetchedData.current[format] = content;
           toast.dismiss(toastId);
         } catch (err) {
           console.error(err);

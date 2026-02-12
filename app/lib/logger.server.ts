@@ -1,12 +1,25 @@
-// Hardcoded service metadata for now.
-// In a real build pipeline, these would be injected via define variables or env vars.
-const SERVICE_NAME = 'mediapeek-worker';
-const SERVICE_VERSION = '1.0.0'; // TODO: hook up to git commit hash
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+const SERVICE_NAME = 'fastlink-worker';
+const SERVICE_VERSION = '1.0.0';
+
+export interface LogContext {
+  requestId: string;
+  httpRequest?: {
+    requestMethod: string;
+    requestUrl: string;
+    status: number;
+    remoteIp?: string;
+    userAgent?: string;
+    latency?: string;
+  };
+  customContext?: Record<string, unknown>;
+}
 
 export interface LogEvent {
   severity: 'INFO' | 'WARNING' | 'ERROR';
   message: string;
-  requestId: string;
+  requestId?: string;
 
   httpRequest?: {
     requestMethod: string;
@@ -23,51 +36,59 @@ export interface LogEvent {
 }
 
 /**
+ * AsyncLocalStorage instance for request-scoped context.
+ * Wrap your request handler in `requestStorage.run(context, callback)`
+ * to make context available in all downstream functions.
+ */
+export const requestStorage = new AsyncLocalStorage<LogContext>();
+
+/**
  * Tail Sampling Logic:
  * - Always keep ERROR/WARNING
  * - Always keep slow requests (> 2s)
+ * - Always keep in dev
  * - Sample 10% of everything else
  */
 function shouldSample(event: LogEvent): boolean {
-  // 1. Always keep errors and warnings
   if (event.severity === 'ERROR' || event.severity === 'WARNING') return true;
 
-  // 2. Always keep slow requests (if latency available)
   if (event.httpRequest?.latency) {
     const latencySec = parseFloat(event.httpRequest.latency.replace('s', ''));
     if (!isNaN(latencySec) && latencySec > 2.0) return true;
   }
 
-  // 3. Probabilistic sampling for the rest (10%)
-  // In development, we might want 100%, but let's stick to logic for now.
-  // We'll trust the caller environment check if they want to force log.
-  // Actually, for local dev, let's keep all.
-  if (
-    typeof import.meta !== 'undefined' &&
-    import.meta.env &&
-    import.meta.env.DEV
-  )
-    return true;
+  if (import.meta.env.DEV) return true;
 
   return Math.random() < 0.1;
 }
 
 /**
- * Standardized JSON Logger
- * Adheres to: internal-docs/logging_standards.md
- * Output: Single line JSON object
+ * Standardized JSON Logger with AsyncLocalStorage integration.
+ * Automatically merges request context from ALS store.
  */
 export function log(event: LogEvent) {
   if (!shouldSample(event)) return;
+
+  // Merge ALS store context into event
+  const store = requestStorage.getStore();
+  const mergedEvent: LogEvent = {
+    ...event,
+    requestId: event.requestId ?? store?.requestId,
+    httpRequest: event.httpRequest ?? store?.httpRequest,
+    context: {
+      ...store?.customContext,
+      ...event.context,
+    },
+  };
 
   const logPayload = JSON.stringify({
     timestamp: new Date().toISOString(),
     service: SERVICE_NAME,
     version: SERVICE_VERSION,
-    ...event,
+    ...mergedEvent,
   });
 
-  switch (event.severity) {
+  switch (mergedEvent.severity) {
     case 'ERROR':
       console.error(logPayload);
       break;

@@ -95,8 +95,8 @@ const AUDIO_FORMAT_RULES: FormatRule[] = [
   },
 ];
 
-export const cleanMetadataString = (s: string | undefined): string => {
-  if (!s) return '';
+export const cleanMetadataString = (s: string | undefined): string | undefined => {
+  if (!s) return undefined;
   return s.trim();
 };
 
@@ -239,7 +239,7 @@ export const cleanTrackTitle = (
   displayTitle = displayTitle.replace(/(\[|\()?\s*\bForced\b\s*(\]|\))?/gi, '');
 
   displayTitle = displayTitle.trim();
-  return cleanMetadataString(displayTitle);
+  return cleanMetadataString(displayTitle) ?? null;
 };
 
 export const cleanAudioTrackTitle = (
@@ -261,22 +261,22 @@ export const cleanAudioTrackTitle = (
   const keywordsToRemove: string[] = [...COMMON_AUDIO_TERMS_TO_REMOVE];
 
   // A. Metadata Fields
-  METADATA_FIELDS_TO_CHECK.forEach((field) => {
+  for (const field of METADATA_FIELDS_TO_CHECK) {
     const val = track[field];
     if (typeof val === 'string') keywordsToRemove.push(val);
     if (typeof val === 'number') keywordsToRemove.push(String(val));
-  });
+  }
 
   // B. Format Rules
-  const format = String(track.Format || '').toUpperCase();
-  const formatCom = String(track.Format_Commercial || '').toUpperCase();
-  const codecId = String(track.CodecID || '').toUpperCase();
+  const format = String(track.Format ?? '').toUpperCase();
+  const formatCom = String(track.Format_Commercial ?? '').toUpperCase();
+  const codecId = String(track.CodecID ?? '').toUpperCase();
 
-  AUDIO_FORMAT_RULES.forEach((rule) => {
+  for (const rule of AUDIO_FORMAT_RULES) {
     if (rule.check(format, formatCom, codecId)) {
       keywordsToRemove.push(...rule.remove);
     }
-  });
+  }
 
   // 3. Execute Removal
   processingTitle = removeKeywords(processingTitle, keywordsToRemove);
@@ -314,10 +314,10 @@ export const cleanSubtitleTrackTitle = (
   const keywordsToRemove: string[] = [...COMMON_SUBTITLE_TERMS_TO_REMOVE];
 
   // Keywords from Metadata
-  METADATA_FIELDS_TO_CHECK.forEach((field) => {
+  for (const field of METADATA_FIELDS_TO_CHECK) {
     const val = track[field];
     if (typeof val === 'string') keywordsToRemove.push(val);
-  });
+  }
 
   // 3. Execute Removal
   processingTitle = removeKeywords(processingTitle, keywordsToRemove);
@@ -365,6 +365,6 @@ export const formatAudioChannels = (
     case '2.0':
       return 'Stereo';
     default:
-      return `${layout} channel`;
+      return `${layout} Channels`;
   }
 };

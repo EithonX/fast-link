@@ -50,7 +50,7 @@ export function useClipboardSuggestion(currentUrl: string | undefined) {
 
           if (result.state === 'granted') {
             setIsPermissionGranted(true);
-            checkClipboard();
+            void checkClipboard();
           } else if (result.state === 'prompt') {
             // Do not read on load. Wait for user interaction (focus).
             setIsPermissionGranted(false);
@@ -67,7 +67,7 @@ export function useClipboardSuggestion(currentUrl: string | undefined) {
     };
 
     if (typeof window !== 'undefined') {
-      attemptAutoRead();
+      void attemptAutoRead();
       window.addEventListener('focus', attemptAutoRead);
     }
 

@@ -3,6 +3,7 @@ import { useRouteLoaderData } from 'react-router';
 import { Theme, useTheme } from 'remix-themes';
 
 import { cn } from '~/lib/utils';
+import { startNativeViewTransition } from '~/lib/view-transition';
 import type { loader } from '~/root';
 
 export function ModeToggle() {
@@ -22,8 +23,10 @@ export function ModeToggle() {
       <button
         type="button"
         onClick={() => {
-          setTheme(Theme.LIGHT);
-          setThemeState(Theme.LIGHT);
+          void startNativeViewTransition(() => {
+            setTheme(Theme.LIGHT);
+            setThemeState(Theme.LIGHT);
+          });
         }}
         className={cn(
           'min-w-[2.8rem] rounded-md px-1 py-0.5 text-[10px] font-medium transition-all sm:min-w-12 sm:px-2 sm:text-xs',
@@ -37,8 +40,10 @@ export function ModeToggle() {
       <button
         type="button"
         onClick={() => {
-          setTheme(Theme.DARK);
-          setThemeState(Theme.DARK);
+          void startNativeViewTransition(() => {
+            setTheme(Theme.DARK);
+            setThemeState(Theme.DARK);
+          });
         }}
         className={cn(
           'min-w-[2.8rem] rounded-md px-1 py-0.5 text-[10px] font-medium transition-all sm:min-w-12 sm:px-2 sm:text-xs',
@@ -52,8 +57,10 @@ export function ModeToggle() {
       <button
         type="button"
         onClick={() => {
-          setTheme(null);
-          setThemeState(null);
+          void startNativeViewTransition(() => {
+            setTheme(null);
+            setThemeState(null);
+          });
         }}
         className={cn(
           'min-w-[2.8rem] rounded-md px-1 py-0.5 text-[10px] font-medium transition-all sm:min-w-12 sm:px-2 sm:text-xs',

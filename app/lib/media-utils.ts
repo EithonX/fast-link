@@ -2,6 +2,36 @@ import { MEDIA_CONSTANTS } from '~/lib/media/constants';
 import type { MediaTrackJSON } from '~/types/media';
 
 /**
+ * Checks if a filename is valid (not binary garbage from WASM).
+ * MediaInfo sometimes returns binary data as the filename when the
+ * file is read from a buffer without metadata.
+ */
+export const isValidFilename = (name: string | undefined): name is string => {
+  if (!name || name.length === 0) return false;
+  // Check for non-printable characters (excluding common Unicode)
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x08\x0E-\x1F]/.test(name)) return false;
+  // Check if the name is only dots/spaces
+  if (/^[\s.]+$/.test(name)) return false;
+  return true;
+};
+
+/**
+ * Removes empty string values from a record.
+ */
+export const removeEmptyStrings = (
+  obj: Record<string, unknown>,
+): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== '') {
+      result[key] = value;
+    }
+  }
+  return result;
+};
+
+/**
  * Checks if the filename indicates an Apple TV source.
  */
 export const isAppleTvFilename = (filename: string): boolean => {
@@ -18,22 +48,22 @@ export const isAppleTvFilename = (filename: string): boolean => {
  * Recursively normalizes MediaInfo output to ensure a flat, friendly JSON structure.
  * It unwraps objects like { "@dt": "...", "#value": "..." } into their raw value.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export const normalizeMediaInfo = (data: any): any => {
+export const normalizeMediaInfo = (data: unknown): unknown => {
   if (Array.isArray(data)) {
-    return data.map((item) => normalizeMediaInfo(item));
+    return data.map((item: unknown) => normalizeMediaInfo(item));
   }
 
   if (typeof data === 'object' && data !== null) {
+    const record = data as Record<string, unknown>;
     // If we find the specific MediaInfo object wrapper, extract the value
-    if ('#value' in data) {
-      return data['#value'];
+    if ('#value' in record) {
+      return record['#value'];
     }
 
     // Otherwise, normalize all children
-    const normalized: any = {};
-    for (const key of Object.keys(data)) {
-      normalized[key] = normalizeMediaInfo(data[key]);
+    const normalized: Record<string, unknown> = {};
+    for (const key of Object.keys(record)) {
+      normalized[key] = normalizeMediaInfo(record[key]);
     }
     return normalized;
   }
@@ -41,7 +71,6 @@ export const normalizeMediaInfo = (data: any): any => {
   // Primitives pass through unchanged
   return data;
 };
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
  * Derived accessibility feature flags.
@@ -61,12 +90,12 @@ export const getAccessibilityFeatures = (
   generalTrack?: MediaTrackJSON,
 ): AccessibilityFeatures => {
   // Subtitle Tech (SDH & CC)
-  const hasSDH = textTracks.some((t) => (t['Title'] || '').includes('SDH'));
+  const hasSDH = textTracks.some((t) => (t['Title'] ?? '').includes('SDH'));
 
   const hasCC =
     textTracks.some((t) => {
-      const title = (t['Title'] || '').toLowerCase();
-      const format = (t['Format'] || '').toLowerCase();
+      const title = (t['Title'] ?? '').toLowerCase();
+      const format = (t['Format'] ?? '').toLowerCase();
       return (
         title.includes('cc') ||
         title.includes('closed captions') ||
@@ -77,8 +106,8 @@ export const getAccessibilityFeatures = (
     (() => {
       if (!generalTrack) return false;
       const fileName = (
-        (generalTrack['File_Name'] as string) ||
-        (generalTrack['CompleteName'] as string) || // Fallback
+        (generalTrack['File_Name'] as string) ??
+        (generalTrack['CompleteName'] as string) ??
         ''
       ).toLowerCase();
 
@@ -86,8 +115,8 @@ export const getAccessibilityFeatures = (
 
       // If Apple TV, check for SRT, tx3g, or UTF-8 text tracks
       return textTracks.some((t) => {
-        const format = (t['Format'] || '').toLowerCase();
-        const codecID = (t['CodecID'] || '').toLowerCase();
+        const format = (t['Format'] ?? '').toLowerCase();
+        const codecID = (t['CodecID'] ?? '').toLowerCase();
         return (
           format.includes('srt') ||
           format.includes('subrip') ||
@@ -101,8 +130,8 @@ export const getAccessibilityFeatures = (
 
   // Audio Description (AD)
   const hasAD = audioTracks.some((a) => {
-    const title = (a['Title'] || '').toLowerCase();
-    const serviceKind = (a['ServiceKind'] || '').toLowerCase();
+    const title = (a['Title'] ?? '').toLowerCase();
+    const serviceKind = (a['ServiceKind'] ?? '').toLowerCase();
     return (
       title.includes('ad') ||
       title.includes('audio description') ||
@@ -126,15 +155,15 @@ export const getMediaBadges = (
 
   // Filename for IMAX check
   const filenameRaw =
-    (generalTrack?.['CompleteName'] as string) ||
-    (generalTrack?.['File_Name'] as string) ||
+    (generalTrack?.['CompleteName'] as string) ??
+    (generalTrack?.['File_Name'] as string) ??
     '';
   const displayFilename =
-    filenameRaw.split('/').pop()?.split('\\').pop() || filenameRaw;
+    filenameRaw.split('/').pop()?.split('\\').pop() ?? filenameRaw;
 
   // 1. Resolution
   if (videoTracks.length > 0) {
-    const widthRaw = videoTracks[0]['Width'] || '0';
+    const widthRaw = videoTracks[0]['Width'] ?? '0';
     const width = Number(widthRaw);
 
     if (!isNaN(width)) {
@@ -144,7 +173,7 @@ export const getMediaBadges = (
     }
 
     // IMAX Detection
-    const aspectRatio = Number(videoTracks[0]['DisplayAspectRatio'] || 0);
+    const aspectRatio = Number(videoTracks[0]['DisplayAspectRatio'] ?? 0);
     // Allow small margin of error for aspect ratios (epsilon)
     const isImaxRatio =
       Math.abs(aspectRatio - 1.43) < 0.02 || Math.abs(aspectRatio - 1.9) < 0.02;
@@ -157,8 +186,8 @@ export const getMediaBadges = (
     }
 
     // HDR / Dolby Vision
-    const hdrFormat = videoTracks[0]['HDR_Format'] || '';
-    const hdrCompatibility = videoTracks[0]['HDR_Format_Compatibility'] || '';
+    const hdrFormat = (videoTracks[0]['HDR_Format'] ?? '') as string;
+    const hdrCompatibility = (videoTracks[0]['HDR_Format_Compatibility'] ?? '') as string;
 
     if (
       hdrFormat.includes(TOKENS.HDR10_PLUS) ||
@@ -189,19 +218,17 @@ export const getMediaBadges = (
   let hasDTS = false;
   let hasDolby = false;
 
-  audioTracks.forEach((a) => {
-    // Keys in JSON: "Format", "Format_Commercial_IfAny", "Title"
-    const fmt = a['Format'] || '';
-    const commercial = a['Format_Commercial_IfAny'] || '';
-    const title = a['Title'] || '';
-    const additionalFeatures = a['Format_AdditionalFeatures'] || '';
+  for (const a of audioTracks) {
+    const fmt = (a['Format'] ?? '') as string;
+    const commercial = (a['Format_Commercial_IfAny'] ?? '') as string;
+    const title = (a['Title'] ?? '') as string;
+    const additionalFeatures = (a['Format_AdditionalFeatures'] ?? '') as string;
     const combined = (fmt + commercial + title).toLowerCase();
 
     if (combined.includes(TOKENS.ATMOS)) hasAtmos = true;
 
     // DTS Logic
     if (additionalFeatures.includes('XLL X')) {
-      // Generic XLL X check
       hasDTSX = true;
     } else if (additionalFeatures.includes(TOKENS.XLL)) {
       hasDTS = true;
@@ -215,7 +242,7 @@ export const getMediaBadges = (
       combined.includes(TOKENS.EAC3)
     )
       hasDolby = true;
-  });
+  }
 
   if (hasAtmos) icons.push(BADGES.DOLBY_ATMOS);
   else if (hasDolby && !hasDTS && !hasDTSX) {
@@ -230,7 +257,7 @@ export const getMediaBadges = (
   let isHiResLossless = false;
   let isLossless = false;
 
-  audioTracks.forEach((t) => {
+  for (const t of audioTracks) {
     // 1. Bit Depth (Field or Title Fallback)
     let samplingRate = 0;
     const rawRate = t['SamplingRate'];
@@ -273,7 +300,7 @@ export const getMediaBadges = (
       'wavpack',
       'truehd',
       'mlp',
-    ].includes((t['Format'] as string)?.toLowerCase() || '');
+    ].includes((t['Format'] as string)?.toLowerCase() ?? '');
 
     const isTrackLossless =
       compressionMode === 'lossless' || bitDepth >= 16 || isKnownLosslessFormat;
@@ -285,7 +312,7 @@ export const getMediaBadges = (
         isLossless = true;
       }
     }
-  });
+  }
 
   if (isHiResLossless) {
     icons.push(BADGES.HI_RES_LOSSLESS);

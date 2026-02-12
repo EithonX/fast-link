@@ -22,7 +22,7 @@ export async function safeClipboardWrite(
     if (
       typeof ClipboardItem !== 'undefined' &&
       navigator.clipboard &&
-      navigator.clipboard.write
+      'write' in navigator.clipboard
     ) {
       const mime = 'text/plain';
       const blobPromise = textOrPromise.then(

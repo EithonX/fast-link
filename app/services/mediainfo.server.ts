@@ -1,4 +1,4 @@
-import { normalizeMediaInfo } from '~/lib/media-utils';
+import { isValidFilename, normalizeMediaInfo } from '~/lib/media-utils';
 import {
   createMediaInfo,
   type MediaInfo,
@@ -24,6 +24,23 @@ export interface MediaInfoAnalysis {
 }
 
 export type MediaInfoFormat = 'object' | 'Text' | 'XML' | 'HTML';
+
+/**
+ * Wrapper that provides automatic cleanup via Symbol.dispose.
+ * Use with `using` keyword for guaranteed resource management.
+ */
+class DisposableMediaInfo {
+  private instance: MediaInfo;
+  constructor(instance: MediaInfo) {
+    this.instance = instance;
+  }
+  get mi(): MediaInfo {
+    return this.instance;
+  }
+  [Symbol.dispose](): void {
+    this.instance.close();
+  }
+}
 
 export async function analyzeMediaBuffer(
   fileBuffer: Uint8Array,
@@ -68,118 +85,113 @@ export async function analyzeMediaBuffer(
 
   const results: Record<string, string> = {};
 
-  // Generate formats sequentially to save memory/CPU
-  // Default to JSON if no format specified effectively
   if (formatsToGenerate.length === 0) {
     formatsToGenerate.push({ type: 'object', key: 'json' });
   }
 
-  let infoInstance: MediaInfo | undefined;
-  try {
-    const tFactory = performance.now();
-    infoInstance = await createMediaInfo();
+  const tFactory = performance.now();
+  const rawInstance = await createMediaInfo();
+  using disposable = new DisposableMediaInfo(rawInstance);
+  const infoInstance = disposable.mi;
 
-    // Set initial options (defaults for subsequent loops)
-    infoInstance.options.chunkSize = 5 * 1024 * 1024;
-    infoInstance.options.coverData = false;
+  infoInstance.options.chunkSize = 5 * 1024 * 1024;
+  infoInstance.options.coverData = false;
 
-    diagnostics.factoryCreateTimeMs = Math.round(performance.now() - tFactory);
+  diagnostics.factoryCreateTimeMs = Math.round(performance.now() - tFactory);
 
-    for (const { type, key } of formatsToGenerate) {
-      const tFormat = performance.now();
-      try {
-        // Use 'text' (lowercase) for Text view to match MediaInfo expectation
-        const formatStr = type === 'Text' ? 'text' : type;
+  for (const { type, key } of formatsToGenerate) {
+    const tFormat = performance.now();
+    try {
+      const formatStr = type === 'Text' ? 'text' : type;
 
-        infoInstance.options.format = formatStr as 'object';
-        // Enable full output (internal tags) for object/JSON view AND Text view
-        infoInstance.options.full = Boolean(
-          type === 'object' || type === 'Text',
-        );
+      infoInstance.options.format = formatStr as 'object';
+      infoInstance.options.full = Boolean(
+        type === 'object' || type === 'Text',
+      );
 
-        infoInstance.reset();
+      infoInstance.reset();
 
-        // For 'object' format, analyzeData returns the result directly.
-        // For others, we need to call inform().
-        const resultData = await infoInstance.analyzeData(
-          () => fileSize,
-          readChunk,
-        );
-        let resultStr = '';
+      const resultData = await infoInstance.analyzeData(
+        () => fileSize,
+        readChunk,
+      );
+      let resultStr = '';
 
-        if (type !== 'object') {
-          resultStr = infoInstance.inform();
-        }
-
-        if (type === 'object') {
-          try {
-            // Normalize the data (unwrap { #value } objects) before returning
-            const json = normalizeMediaInfo(resultData);
-
-            if (json && json.media && json.media.track) {
-              /* eslint-disable @typescript-eslint/no-explicit-any */
-              const generalTrack = json.media.track.find(
-                (t: any) => t['@type'] === 'General',
-              ) as any;
-              /* eslint-enable @typescript-eslint/no-explicit-any */
-              if (generalTrack) {
-                if (
-                  !generalTrack['CompleteName'] &&
-                  !generalTrack['Complete_name'] &&
-                  !generalTrack['File_Name']
-                ) {
-                  generalTrack['CompleteName'] = filename;
-                }
-              }
-            }
-            results[key] = JSON.stringify(json, null, 2);
-          } catch (e) {
-            diagnostics.objectProcessError =
-              e instanceof Error ? e.message : String(e);
-            results[key] = '{}';
-          }
-        } else if (type === 'Text') {
-          if (!resultStr.includes('Complete name')) {
-            // Injection logic for text
-            const lines = resultStr.split('\n');
-            const generalIndex = lines.findIndex((l: string) =>
-              l.trim().startsWith('General'),
-            );
-            if (generalIndex !== -1) {
-              let insertIndex = generalIndex + 1;
-              for (let i = generalIndex + 1; i < lines.length; i++) {
-                if (lines[i].trim().startsWith('Unique ID')) {
-                  insertIndex = i + 1;
-                  break;
-                }
-                if (lines[i].trim() === '') break;
-              }
-              const padding = ' '.repeat(41 - 'Complete name'.length);
-              lines.splice(
-                insertIndex,
-                0,
-                `Complete name${padding}: ${filename}`,
-              );
-              resultStr = lines.join('\n');
-            }
-          }
-          results[key] = resultStr;
-        } else {
-          results[key] = resultStr;
-        }
-
-        diagnostics.formatGenerationTimes[key] = Math.round(
-          performance.now() - tFormat,
-        );
-      } catch (err) {
-        diagnostics.formatErrors[key] =
-          err instanceof Error ? err.message : String(err);
-        results[key] = `Error generating ${type} view.`;
+      if (type !== 'object') {
+        resultStr = infoInstance.inform();
       }
-    }
-  } finally {
-    if (infoInstance) {
-      infoInstance.close();
+
+      if (type === 'object') {
+        try {
+          const json = normalizeMediaInfo(resultData) as Record<
+            string,
+            Record<string, unknown>
+          > | null;
+
+          if (json?.media && Array.isArray((json.media as Record<string, unknown>).track)) {
+            const tracks = (json.media as Record<string, unknown>).track as Record<string, unknown>[];
+            const generalTrack = tracks.find(
+              (t) => t['@type'] === 'General',
+            );
+            if (generalTrack) {
+              // Inject filename if MediaInfo didn't detect one
+              if (
+                !generalTrack['CompleteName'] &&
+                !generalTrack['Complete_name'] &&
+                !generalTrack['File_Name']
+              ) {
+                generalTrack['CompleteName'] = filename;
+              }
+
+              // Validate any detected filename isn't binary garbage
+              const detectedName = generalTrack['CompleteName'] as string | undefined;
+              if (detectedName && !isValidFilename(detectedName)) {
+                generalTrack['CompleteName'] = filename;
+              }
+            }
+          }
+          results[key] = JSON.stringify(json, null, 2);
+        } catch (e) {
+          diagnostics.objectProcessError =
+            e instanceof Error ? e.message : String(e);
+          results[key] = '{}';
+        }
+      } else if (type === 'Text') {
+        if (!resultStr.includes('Complete name')) {
+          const lines = resultStr.split('\n');
+          const generalIndex = lines.findIndex((l: string) =>
+            l.trim().startsWith('General'),
+          );
+          if (generalIndex !== -1) {
+            let insertIndex = generalIndex + 1;
+            for (let i = generalIndex + 1; i < lines.length; i++) {
+              if (lines[i].trim().startsWith('Unique ID')) {
+                insertIndex = i + 1;
+                break;
+              }
+              if (lines[i].trim() === '') break;
+            }
+            const padding = ' '.repeat(41 - 'Complete name'.length);
+            lines.splice(
+              insertIndex,
+              0,
+              `Complete name${padding}: ${filename}`,
+            );
+            resultStr = lines.join('\n');
+          }
+        }
+        results[key] = resultStr;
+      } else {
+        results[key] = resultStr;
+      }
+
+      diagnostics.formatGenerationTimes[key] = Math.round(
+        performance.now() - tFormat,
+      );
+    } catch (err) {
+      diagnostics.formatErrors[key] =
+        err instanceof Error ? err.message : String(err);
+      results[key] = `Error generating ${type} view.`;
     }
   }
 

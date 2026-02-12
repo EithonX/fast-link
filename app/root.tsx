@@ -60,7 +60,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useLoaderData<typeof loader>();
   return (
-    <ThemeProvider specifiedTheme={data?.theme} themeAction="/action/set-theme">
+    <ThemeProvider specifiedTheme={data.theme} themeAction="/action/set-theme">
       <AppWithProviders>{children}</AppWithProviders>
     </ThemeProvider>
   );
@@ -80,13 +80,13 @@ function AppWithProviders({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
-        <PreventFlashOnWrongTheme ssrTheme={Boolean(data?.theme)} />
+        <PreventFlashOnWrongTheme ssrTheme={Boolean(data.theme)} />
         <Links />
         {/* Favicon */}
         <link rel="icon" type="image/svg+xml" href="/fastlink-icon.svg" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.ENV = ${JSON.stringify(data?.env)}`,
+            __html: `window.ENV = ${JSON.stringify(data.env)}`,
           }}
         />
         <script

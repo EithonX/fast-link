@@ -1,8 +1,13 @@
+import path from 'node:path';
+
+import { DiagnosticsError } from '~/lib/error-utils';
 import {
   getEmulationHeaders,
+  isArchiveExtension,
   resolveGoogleDriveUrl,
   validateUrl,
 } from '~/lib/server-utils';
+import { fastLinkEmitter } from '~/services/event-bus.server';
 
 export interface FetchDiagnostics {
   headRequestDurationMs: number;
@@ -10,8 +15,12 @@ export interface FetchDiagnostics {
   totalDurationMs: number;
   isGoogleDrive: boolean;
   resolvedFilename: string;
+  innerFilename?: string;
   responseStatus: number;
   probeMethod: string;
+  sha256?: string;
+  isArchive: boolean;
+  isZipCompressed: boolean;
 }
 
 export interface MediaFetchResult {
@@ -96,7 +105,7 @@ export async function fetchMediaChunk(
 
   // Fallback to Content-Length if no Content-Range
   if (!fileSize) {
-    fileSize = parseInt(headRes.headers.get('content-length') || '0', 10);
+    fileSize = parseInt(headRes.headers.get('content-length') ?? '0', 10);
   }
 
   if (!fileSize) throw new Error('Could not determine file size');
@@ -121,6 +130,10 @@ export async function fetchMediaChunk(
   }
   diagnostics.resolvedFilename = filename;
 
+  // Determine if the file is an archive by extension
+  const ext = path.posix.extname(filename).toLowerCase();
+  const isArchive = isArchiveExtension(ext);
+
   // 3. Fetch Content Chunk
   const fetchEnd = Math.min(chunkSize - 1, fileSize - 1);
 
@@ -140,12 +153,25 @@ export async function fetchMediaChunk(
   if (!reader) throw new Error('Failed to retrieve response body stream');
 
   // Check for Zip Header to transparently decompress Deflate streams
-  // We need to read the first chunk primarily to check for the Zip signature.
+  // Only decompress if the file extension indicates an archive format
   const ZIP_SIG = [0x50, 0x4b, 0x03, 0x04];
 
+  // Read with a timeout to avoid hanging on misbehaving servers
+  const STREAM_TIMEOUT_MS = 30_000;
   let firstChunk: Uint8Array | null = null;
   {
-    const { done, value } = await reader.read();
+    const readPromise = reader.read();
+    const timeoutPromise = new Promise<{ done: true; value: undefined }>(
+      (_, reject) =>
+        setTimeout(
+          () => reject(new Error('Stream read timeout')),
+          STREAM_TIMEOUT_MS,
+        ),
+    );
+    const { done, value } = await Promise.race([
+      readPromise,
+      timeoutPromise,
+    ]);
     if (!done && value) {
       firstChunk = value;
     }
@@ -153,9 +179,11 @@ export async function fetchMediaChunk(
 
   let finalReader = reader;
   let isZipCompressed = false;
+  let innerFilename: string | undefined;
 
-  // Verify Zip Signature
+  // Verify Zip Signature (only for archive files)
   if (
+    isArchive &&
     firstChunk &&
     firstChunk.length > 30 &&
     firstChunk[0] === ZIP_SIG[0] &&
@@ -175,6 +203,12 @@ export async function fetchMediaChunk(
       const fileNameLength = firstChunk[26] | (firstChunk[27] << 8);
       const extraFieldLength = firstChunk[28] | (firstChunk[29] << 8);
       const dataOffset = 30 + fileNameLength + extraFieldLength;
+
+      // Capture inner filename from zip header
+      if (fileNameLength > 0) {
+        const nameBytes = firstChunk.subarray(30, 30 + fileNameLength);
+        innerFilename = new TextDecoder().decode(nameBytes);
+      }
 
       // Ensure we have enough data in the first chunk to strip the header
       if (firstChunk.length > dataOffset) {
@@ -268,12 +302,39 @@ export async function fetchMediaChunk(
   // Create a view of the actual data we read (no copy)
   const fileBuffer = tempBuffer.subarray(0, offset);
 
-  diagnostics.totalDurationMs = Math.round(performance.now() - tStart);
+  // Generate SHA-256 integrity hash
+  let sha256: string | undefined;
+  try {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', fileBuffer);
+    sha256 = Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  } catch {
+    // Digest not critical, ignore in edge environments
+  }
 
-  return {
+  diagnostics.totalDurationMs = Math.round(performance.now() - tStart);
+  diagnostics.sha256 = sha256;
+  diagnostics.isArchive = isArchive;
+  diagnostics.isZipCompressed = isZipCompressed;
+  if (innerFilename) diagnostics.innerFilename = innerFilename;
+
+  const result: MediaFetchResult = {
     buffer: fileBuffer,
-    filename,
+    filename: innerFilename ?? filename,
     fileSize,
     diagnostics: diagnostics as FetchDiagnostics,
   };
+
+  // Emit fetch completion event
+  fastLinkEmitter.emit('fetch:complete', {
+    filename: result.filename,
+    fileSize,
+    sha256,
+    isArchive,
+    isZipCompressed,
+    durationMs: diagnostics.totalDurationMs,
+  });
+
+  return result;
 }
