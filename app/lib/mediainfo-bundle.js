@@ -18,7 +18,7 @@ function unknownToError(error) {
 // DO NOT EDIT! File generated using `generate-types` script.
 //
 // -----------------------------------------------------------------------------
-// PATCHED FOR CLOUDFLARE WORKERS (MEDIA PEEK)
+// PATCHED FOR CLOUDFLARE WORKERS (FASTLINK)
 // -----------------------------------------------------------------------------
 // This file is a vendored copy of `mediainfo.js` (v0.3.7) esm-bundle.
 // It has been patched to support pre-compiled WebAssembly Modules, which is

@@ -23,7 +23,7 @@ Every log line implies a "Unit of Work" (usually an HTTP Request) and must inclu
 
 To identify _where_ the log came from:
 
-- `service`: Name of the service (e.g., `mediapeek-worker`).
+- `service`: Name of the service (e.g., `fastlink-worker`).
 - `version`: Git commit hash, release tag, or build date (e.g., `2025-01-12`).
 - `environment`: `production`, `development`, or `staging`.
 
