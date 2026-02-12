@@ -64,14 +64,32 @@ export async function loader({ params, request }: LoaderFunctionArgs): Promise<L
   }
 
   let mediaType: LoaderData['mediaType'] = 'unknown';
-  if (contentType.startsWith('video/')) {
-    mediaType = 'video';
-  } else if (contentType.startsWith('audio/')) {
-    mediaType = 'audio';
-  } else if (contentType.startsWith('image/')) {
-    mediaType = 'image';
-  } else if (contentType === 'application/pdf') {
-    mediaType = 'pdf';
+
+  // Helper to determine media category from MIME type
+  const getCategoryFromType = (type: string): LoaderData['mediaType'] | 'unknown' => {
+    if (type.startsWith('video/')) return 'video';
+    if (type.startsWith('audio/')) return 'audio';
+    if (type.startsWith('image/')) return 'image';
+    if (type === 'application/pdf') return 'pdf';
+    return 'unknown';
+  };
+
+  mediaType = getCategoryFromType(contentType);
+
+  // Fallback: If unknown, try to guess from filename extension
+  if (mediaType === 'unknown' && filename) {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext) {
+      if (['mp4', 'mkv', 'webm', 'mov', 'avi', 'wmv', 'flv', 'm4v'].includes(ext)) {
+        mediaType = 'video';
+      } else if (['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'].includes(ext)) {
+        mediaType = 'audio';
+      } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
+        mediaType = 'image';
+      } else if (ext === 'pdf') {
+        mediaType = 'pdf';
+      }
+    }
   }
 
   return {
@@ -104,7 +122,7 @@ export default function PreviewPage() {
               </div>
             </button>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-sm font-semibold sm:text-base">
+              <h1 className="text-sm font-semibold sm:text-base break-all line-clamp-2">
                 {data.filename}
               </h1>
               <p className="text-muted-foreground text-[10px] sm:text-xs">
