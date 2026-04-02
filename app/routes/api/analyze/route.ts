@@ -138,16 +138,38 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         url: initialUrl,
       });
 
-      // 1. Fetch Media Chunk
-      const { buffer, fileSize, filename } = await fetchMediaChunk(initialUrl);
+      // 1. Fetch media bytes (with filename + archive metadata resolution)
+      const {
+        buffer,
+        byteSource,
+        fileSize,
+        filename,
+        filenameSource,
+        archiveEntry,
+      } = await fetchMediaChunk(initialUrl);
 
-      // 2. Analyze
-      const { results } = await analyzeMediaBuffer(
+      // 2. Analyze with optional remote seek reads when MediaInfo requests deeper offsets
+      const {
+        results,
+        diagnostics: analysisDiagnostics,
+        resolvedFilename,
+        resolvedFilenameSource,
+      } = await analyzeMediaBuffer(
         buffer,
         fileSize,
         filename,
+        filenameSource,
         requestedFormats,
+        archiveEntry,
+        byteSource?.readChunk,
       );
+
+      fastLinkEmitter.emit('analyze:complete', {
+        results,
+        diagnostics: analysisDiagnostics,
+        resolvedFilename,
+        resolvedFilenameSource,
+      });
 
       return Response.json({ results });
     } catch (error) {

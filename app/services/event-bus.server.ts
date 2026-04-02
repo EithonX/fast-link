@@ -19,6 +19,8 @@ export interface FastLinkEvents {
   'analyze:complete': {
     results: Record<string, string>;
     diagnostics: MediaInfoDiagnostics;
+    resolvedFilename?: string;
+    resolvedFilenameSource?: string;
   };
   error: { error: unknown; context?: Record<string, unknown> };
 }

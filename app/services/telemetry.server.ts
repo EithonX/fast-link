@@ -25,6 +25,15 @@ export class TelemetryService {
 
     fastLinkEmitter.on('analyze:complete', (payload) => {
       this.updateContext('analysis', payload.diagnostics);
+      if (payload.resolvedFilename) {
+        this.updateContext('resolvedFilename', payload.resolvedFilename);
+      }
+      if (payload.resolvedFilenameSource) {
+        this.updateContext(
+          'resolvedFilenameSource',
+          payload.resolvedFilenameSource,
+        );
+      }
     });
 
     fastLinkEmitter.on('turnstile:verify', (payload) => {

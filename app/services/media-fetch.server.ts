@@ -1,6 +1,13 @@
-import path from 'node:path';
-
+import {
+  type ArchiveEntryInspection,
+  inspectArchiveEntry,
+} from '~/lib/archive-inspection';
 import { DiagnosticsError } from '~/lib/error-utils';
+import {
+  type FilenameSource,
+  extractFilenameFromUrl,
+  parseContentDispositionFilename,
+} from '~/lib/filename-resolution';
 import {
   getEmulationHeaders,
   isArchiveExtension,
@@ -15,24 +22,454 @@ export interface FetchDiagnostics {
   totalDurationMs: number;
   isGoogleDrive: boolean;
   resolvedFilename: string;
-  innerFilename?: string;
+  resolvedFilenameSource: FilenameSource;
   responseStatus: number;
   probeMethod: string;
-  sha256?: string;
-  isArchive: boolean;
-  isZipCompressed: boolean;
+  firstByteReadTimeoutMs?: number;
+  firstByteReadRetries?: number;
+  firstByteReadStrategy?: 'range' | 'no_range_fallback';
+  seekFetchCount?: number;
+  seekBytesFetched?: number;
+  streamCloseError?: string;
+}
+
+const FIRST_BYTE_READ_TIMEOUT_MS = 15_000;
+const MAX_FIRST_BYTE_READ_RETRIES = 1;
+const NO_RANGE_FALLBACK_TIMEOUT_MS = 25_000;
+const SAFE_LIMIT = 10 * 1024 * 1024;
+const REMOTE_RANGE_CHUNK_SIZE = 2 * 1024 * 1024;
+const REMOTE_RANGE_FETCH_LIMIT = 8 * 1024 * 1024;
+const REMOTE_RANGE_CACHE_LIMIT = 32 * 1024 * 1024;
+const ZIP_TAIL_INSPECTION_BYTES = 128 * 1024;
+
+export interface MediaByteSource {
+  initialBuffer: Uint8Array;
+  readChunk: (size: number, offset: number) => Promise<Uint8Array>;
 }
 
 export interface MediaFetchResult {
   buffer: Uint8Array;
+  byteSource?: MediaByteSource;
   filename: string;
-  fileSize: number;
+  filenameSource: FilenameSource;
+  fileSize?: number;
   diagnostics: FetchDiagnostics;
+  sha256?: string;
+  innerFilename?: string;
+  archiveEntry?: ArchiveEntryInspection;
 }
+
+const resolveResponseFileSize = (response: Response): number | undefined => {
+  const contentRange = response.headers.get('content-range');
+  if (contentRange) {
+    const match = /\/(\d+)$/.exec(contentRange);
+    if (match) {
+      return parseInt(match[1], 10);
+    }
+  }
+
+  if (response.status === 206) {
+    return undefined;
+  }
+
+  const contentLength = response.headers.get('content-length');
+  if (!contentLength) {
+    return undefined;
+  }
+
+  return parseInt(contentLength, 10);
+};
+
+const isHtmlResponse = (response: Response) =>
+  response.headers.get('content-type')?.toLowerCase().includes('text/html') ??
+  false;
+
+const didHonorRangeRequest = (response: Response) =>
+  response.status === 206 || response.headers.has('content-range');
+
+const assertByteFetchStatus = (res: Response) => {
+  if (res.status === 200 || res.status === 206) return;
+  if (res.status === 404) {
+    throw new Error('Media file not found. Check the URL.');
+  }
+  if (res.status === 403) {
+    throw new Error(
+      'Access denied while fetching media bytes. The link may have expired or may block server-side requests.',
+    );
+  }
+  throw new Error(
+    `Unable to retrieve media bytes (HTTP ${String(res.status)}).`,
+  );
+};
+
+const readFirstChunkWithTimeout = async (
+  sourceReader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+) => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>(
+    (_, reject) =>
+      (timeoutId = setTimeout(() => {
+        reject(new Error('Fetch stream read timed out'));
+      }, timeoutMs)),
+  );
+
+  try {
+    const { done, value } = await Promise.race([
+      sourceReader.read(),
+      timeoutPromise,
+    ]);
+    return done ? null : value;
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
+};
+
+const readStreamIntoBuffer = async (
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  firstChunk: Uint8Array | null,
+  limit: number,
+): Promise<Uint8Array> => {
+  const tempBuffer = new Uint8Array(limit);
+  let offset = 0;
+
+  if (firstChunk) {
+    const initialSize = Math.min(firstChunk.byteLength, limit);
+    tempBuffer.set(firstChunk.subarray(0, initialSize), offset);
+    offset += initialSize;
+    if (offset >= limit) {
+      await reader.cancel();
+      return tempBuffer.subarray(0, offset);
+    }
+  }
+
+  while (offset < limit) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const bytesToCopy = Math.min(value.byteLength, limit - offset);
+    tempBuffer.set(value.subarray(0, bytesToCopy), offset);
+    offset += bytesToCopy;
+
+    if (bytesToCopy < value.byteLength) {
+      await reader.cancel();
+      break;
+    }
+  }
+
+  return tempBuffer.subarray(0, offset);
+};
+
+const readCompressedPrefix = async (
+  compressedData: Uint8Array,
+  limit: number,
+): Promise<Uint8Array> => {
+  const inputStream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(compressedData);
+      controller.close();
+    },
+  });
+  const decompressor = new DecompressionStream(
+    'deflate-raw',
+  ) as unknown as ReadableWritablePair<Uint8Array, Uint8Array>;
+  const reader = inputStream.pipeThrough(decompressor).getReader();
+
+  const tempBuffer = new Uint8Array(limit);
+  let offset = 0;
+
+  try {
+    while (offset < limit) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const bytesToCopy = Math.min(value.byteLength, limit - offset);
+      tempBuffer.set(value.subarray(0, bytesToCopy), offset);
+      offset += bytesToCopy;
+
+      if (bytesToCopy < value.byteLength) {
+        await reader.cancel();
+        break;
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      offset === 0 ||
+      (!message.includes('incomplete data') &&
+        !message.includes('unexpected end of file'))
+    ) {
+      throw error;
+    }
+  }
+
+  return tempBuffer.subarray(0, offset);
+};
+
+const extractArchivePrefix = async (
+  rawBuffer: Uint8Array,
+  archiveEntry: ArchiveEntryInspection,
+): Promise<Uint8Array | null> => {
+  if (
+    archiveEntry.dataOffset === undefined ||
+    archiveEntry.dataOffset >= rawBuffer.byteLength
+  ) {
+    return null;
+  }
+
+  if (
+    archiveEntry.archiveKind === 'tar' ||
+    archiveEntry.compression === 'stored'
+  ) {
+    const availableEnd =
+      archiveEntry.compressedSize !== undefined
+        ? Math.min(
+            rawBuffer.byteLength,
+            archiveEntry.dataOffset + archiveEntry.compressedSize,
+          )
+        : rawBuffer.byteLength;
+
+    return rawBuffer.subarray(archiveEntry.dataOffset, availableEnd);
+  }
+
+  if (archiveEntry.compression === 'deflate') {
+    const compressedEnd =
+      archiveEntry.compressedSize !== undefined
+        ? Math.min(
+            rawBuffer.byteLength,
+            archiveEntry.dataOffset + archiveEntry.compressedSize,
+          )
+        : rawBuffer.byteLength;
+
+    const compressedPrefix = rawBuffer.subarray(
+      archiveEntry.dataOffset,
+      compressedEnd,
+    );
+    if (compressedPrefix.byteLength === 0) {
+      return null;
+    }
+
+    return readCompressedPrefix(compressedPrefix, SAFE_LIMIT);
+  }
+
+  return null;
+};
+
+const fetchZipTailBuffer = async (
+  url: string,
+  totalSize: number,
+): Promise<Uint8Array | null> => {
+  if (!Number.isFinite(totalSize) || totalSize <= 0) {
+    return null;
+  }
+
+  const start = Math.max(0, totalSize - ZIP_TAIL_INSPECTION_BYTES);
+  const response = await fetch(url, {
+    headers: getEmulationHeaders(
+      `bytes=${String(start)}-${String(totalSize - 1)}`,
+    ),
+    redirect: 'follow',
+  });
+  if (response.status !== 200 && response.status !== 206) {
+    return null;
+  }
+
+  return new Uint8Array(await response.arrayBuffer());
+};
+
+const createRemoteByteSource = (
+  url: string,
+  initialBuffer: Uint8Array,
+  fileSize: number | undefined,
+  diagnostics: Partial<FetchDiagnostics>,
+): MediaByteSource => {
+  const cache = new Map<number, { bytes: Uint8Array; lastUsed: number }>();
+  const remoteBaseOffset = initialBuffer.byteLength;
+  let cacheBytes = 0;
+  let accessCounter = 0;
+
+  const getRemoteChunkStart = (offset: number) => {
+    const delta = offset - remoteBaseOffset;
+    return (
+      remoteBaseOffset +
+      Math.floor(delta / REMOTE_RANGE_CHUNK_SIZE) * REMOTE_RANGE_CHUNK_SIZE
+    );
+  };
+
+  const getRemoteSpanEnd = (chunkStart: number, requestedEnd: number) => {
+    const desiredEnd = Math.max(
+      chunkStart + REMOTE_RANGE_CHUNK_SIZE,
+      requestedEnd,
+    );
+    const boundedEnd = Math.min(
+      desiredEnd,
+      chunkStart + REMOTE_RANGE_FETCH_LIMIT,
+    );
+    if (fileSize === undefined) {
+      return boundedEnd;
+    }
+    return Math.min(fileSize, boundedEnd);
+  };
+
+  const touchChunk = (chunkStart: number) => {
+    const cached = cache.get(chunkStart);
+    if (!cached) return;
+    cached.lastUsed = ++accessCounter;
+  };
+
+  const setChunk = (chunkStart: number, bytes: Uint8Array) => {
+    const existing = cache.get(chunkStart);
+    if (existing) {
+      cacheBytes -= existing.bytes.byteLength;
+    }
+
+    cache.set(chunkStart, {
+      bytes,
+      lastUsed: ++accessCounter,
+    });
+    cacheBytes += bytes.byteLength;
+
+    while (cacheBytes > REMOTE_RANGE_CACHE_LIMIT && cache.size > 0) {
+      let oldestKey: number | null = null;
+      let oldestAccess = Number.POSITIVE_INFINITY;
+
+      for (const [key, value] of cache.entries()) {
+        if (value.lastUsed < oldestAccess) {
+          oldestKey = key;
+          oldestAccess = value.lastUsed;
+        }
+      }
+
+      if (oldestKey === null) break;
+      const removed = cache.get(oldestKey);
+      if (!removed) break;
+      cache.delete(oldestKey);
+      cacheBytes -= removed.bytes.byteLength;
+    }
+  };
+
+  const fetchRemoteSpan = async (offset: number, requestedEnd: number) => {
+    const spanStart = getRemoteChunkStart(offset);
+    const spanEnd = getRemoteSpanEnd(spanStart, requestedEnd);
+    if (spanEnd <= spanStart) {
+      return;
+    }
+
+    const response = await fetch(url, {
+      headers: getEmulationHeaders(
+        `bytes=${String(spanStart)}-${String(spanEnd - 1)}`,
+      ),
+      redirect: 'follow',
+    });
+    assertByteFetchStatus(response);
+
+    const body = new Uint8Array(await response.arrayBuffer());
+    diagnostics.seekFetchCount = (diagnostics.seekFetchCount ?? 0) + 1;
+    diagnostics.seekBytesFetched =
+      (diagnostics.seekBytesFetched ?? 0) + body.byteLength;
+
+    let responseStart = spanStart;
+    if (response.status === 200 && spanStart > 0) {
+      if (body.byteLength <= spanStart) {
+        throw new Error('Origin ignored byte-range seek request.');
+      }
+      responseStart = 0;
+    }
+
+    for (
+      let chunkStart = spanStart;
+      chunkStart < spanEnd;
+      chunkStart += REMOTE_RANGE_CHUNK_SIZE
+    ) {
+      const sliceStart = chunkStart - responseStart;
+      if (sliceStart < 0 || sliceStart >= body.byteLength) {
+        break;
+      }
+
+      const sliceEnd = Math.min(
+        sliceStart + REMOTE_RANGE_CHUNK_SIZE,
+        body.byteLength,
+      );
+      const chunkBytes = body.slice(sliceStart, sliceEnd);
+      if (chunkBytes.byteLength === 0) {
+        break;
+      }
+      setChunk(chunkStart, chunkBytes);
+    }
+  };
+
+  return {
+    initialBuffer,
+    async readChunk(size: number, offset: number) {
+      if (size <= 0 || offset < 0) {
+        return new Uint8Array(0);
+      }
+
+      const requestedEnd =
+        fileSize === undefined
+          ? offset + size
+          : Math.min(fileSize, offset + size);
+      if (requestedEnd <= offset) {
+        return new Uint8Array(0);
+      }
+
+      if (requestedEnd <= initialBuffer.byteLength) {
+        return initialBuffer.subarray(offset, requestedEnd);
+      }
+
+      const result = new Uint8Array(requestedEnd - offset);
+      let cursor = offset;
+      let writeOffset = 0;
+
+      while (cursor < requestedEnd) {
+        if (cursor < initialBuffer.byteLength) {
+          const prefixEnd = Math.min(requestedEnd, initialBuffer.byteLength);
+          const prefixSlice = initialBuffer.subarray(cursor, prefixEnd);
+          result.set(prefixSlice, writeOffset);
+          writeOffset += prefixSlice.byteLength;
+          cursor = prefixEnd;
+          continue;
+        }
+
+        const chunkStart = getRemoteChunkStart(cursor);
+        let cached = cache.get(chunkStart);
+        if (!cached) {
+          await fetchRemoteSpan(cursor, requestedEnd);
+          cached = cache.get(chunkStart);
+        }
+        if (!cached || cached.bytes.byteLength === 0) {
+          break;
+        }
+
+        touchChunk(chunkStart);
+
+        const chunkOffset = cursor - chunkStart;
+        if (chunkOffset >= cached.bytes.byteLength) {
+          break;
+        }
+
+        const available = cached.bytes.subarray(chunkOffset);
+        const bytesToCopy = Math.min(
+          available.byteLength,
+          requestedEnd - cursor,
+        );
+        result.set(available.subarray(0, bytesToCopy), writeOffset);
+        cursor += bytesToCopy;
+        writeOffset += bytesToCopy;
+      }
+
+      return writeOffset === result.byteLength
+        ? result
+        : result.subarray(0, writeOffset);
+    },
+  };
+};
 
 export async function fetchMediaChunk(
   initialUrl: string,
-  chunkSize: number = 2 * 1024 * 1024, // 2MB - enough for container headers/metadata
+  chunkSize: number = SAFE_LIMIT,
 ): Promise<MediaFetchResult> {
   const tStart = performance.now();
   const diagnostics: Partial<FetchDiagnostics> = {};
@@ -42,7 +479,6 @@ export async function fetchMediaChunk(
 
   validateUrl(targetUrl);
 
-  // 1. Initial Request (HEAD with fallback to GET)
   const tHead = performance.now();
   let probeMethod = 'HEAD';
   let headRes = await fetch(targetUrl, {
@@ -51,7 +487,6 @@ export async function fetchMediaChunk(
     redirect: 'follow',
   });
 
-  // If HEAD is not allowed (405), fallback to a GET request for the first byte
   if (headRes.status === 405) {
     probeMethod = 'GET';
     headRes = await fetch(targetUrl, {
@@ -64,275 +499,261 @@ export async function fetchMediaChunk(
   diagnostics.headRequestDurationMs = Math.round(performance.now() - tHead);
   diagnostics.probeMethod = probeMethod;
 
-  // Check for HTML content (indicates a webpage, not a direct file link)
-  const contentType = headRes.headers.get('content-type');
-  if (contentType?.includes('text/html')) {
-    // If it's Google Drive, it might be the rate-limit page
+  if (!headRes.ok) {
+    if (headRes.status === 404) {
+      throw new Error('Media file not found. Check the URL.');
+    }
+    if (headRes.status === 403) {
+      throw new Error(
+        'Access denied. The link may have expired or requires authentication.',
+      );
+    }
+    throw new Error(`Unable to access file (HTTP ${String(headRes.status)}).`);
+  }
+
+  let fileSize = resolveResponseFileSize(headRes);
+
+  let filename = extractFilenameFromUrl(targetUrl);
+  let filenameSource: FilenameSource = 'url';
+  const headFilename = parseContentDispositionFilename(
+    headRes.headers.get('content-disposition'),
+  );
+  if (headFilename) {
+    filename = headFilename;
+    filenameSource = 'content-disposition-head';
+  }
+  diagnostics.resolvedFilename = filename;
+  diagnostics.resolvedFilenameSource = filenameSource;
+
+  const fetchEnd =
+    fileSize !== undefined
+      ? Math.min(chunkSize - 1, fileSize - 1)
+      : chunkSize - 1;
+
+  const tFetch = performance.now();
+  let response: Response | null = null;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let firstChunk: Uint8Array | null = null;
+  let firstByteTimeoutRetries = 0;
+  let firstByteReadStrategy: FetchDiagnostics['firstByteReadStrategy'] =
+    'range';
+  let rangeReadTimedOut = false;
+
+  for (let attempt = 0; attempt <= MAX_FIRST_BYTE_READ_RETRIES; attempt += 1) {
+    const attemptResponse = await fetch(targetUrl, {
+      headers: getEmulationHeaders(`bytes=0-${String(fetchEnd)}`),
+      redirect: 'follow',
+    });
+    assertByteFetchStatus(attemptResponse);
+    diagnostics.responseStatus = attemptResponse.status;
+
+    const attemptReader = attemptResponse.body?.getReader();
+    if (!attemptReader) {
+      throw new Error('Failed to retrieve response body stream');
+    }
+
+    try {
+      response = attemptResponse;
+      reader = attemptReader;
+      firstChunk = await readFirstChunkWithTimeout(
+        attemptReader,
+        FIRST_BYTE_READ_TIMEOUT_MS,
+      );
+      rangeReadTimedOut = false;
+      break;
+    } catch (err) {
+      const isReadTimeout =
+        err instanceof Error && err.message === 'Fetch stream read timed out';
+      if (!isReadTimeout) {
+        throw err;
+      }
+
+      void attemptReader.cancel();
+      firstByteTimeoutRetries += 1;
+      rangeReadTimedOut = true;
+      response = null;
+      reader = null;
+      firstChunk = null;
+    }
+  }
+
+  if (!response || !reader) {
+    const fallbackResponse = await fetch(targetUrl, {
+      headers: getEmulationHeaders(),
+      redirect: 'follow',
+    });
+    assertByteFetchStatus(fallbackResponse);
+    diagnostics.responseStatus = fallbackResponse.status;
+
+    const fallbackReader = fallbackResponse.body?.getReader();
+    if (!fallbackReader) {
+      throw new Error('Failed to retrieve response body stream');
+    }
+
+    try {
+      response = fallbackResponse;
+      reader = fallbackReader;
+      firstChunk = await readFirstChunkWithTimeout(
+        fallbackReader,
+        NO_RANGE_FALLBACK_TIMEOUT_MS,
+      );
+      firstByteReadStrategy = 'no_range_fallback';
+    } catch (err) {
+      const isReadTimeout =
+        err instanceof Error && err.message === 'Fetch stream read timed out';
+      if (isReadTimeout) {
+        void fallbackReader.cancel();
+        throw new Error(
+          rangeReadTimedOut
+            ? `Fetch stream read timed out after ${String(firstByteTimeoutRetries)} range attempt(s) and no-range fallback`
+            : 'Fetch stream read timed out during no-range fallback',
+          { cause: err },
+        );
+      }
+      throw err;
+    }
+  }
+
+  diagnostics.fetchRequestDurationMs = Math.round(performance.now() - tFetch);
+  diagnostics.firstByteReadTimeoutMs = FIRST_BYTE_READ_TIMEOUT_MS;
+  diagnostics.firstByteReadRetries = firstByteTimeoutRetries;
+  diagnostics.firstByteReadStrategy = firstByteReadStrategy;
+
+  if (!response || !reader) {
+    throw new Error('Failed to retrieve response body stream');
+  }
+
+  if (isHtmlResponse(response)) {
+    void reader.cancel();
     if (isGoogleDrive) {
       throw new Error(
         'Google Drive file is rate-limited. Try again in 24 hours.',
       );
     }
 
-    // If we have a 405, it might be that the server returned an HTML error page for HEAD,
-    // but code above should have handled the fallback. If we are here, even the fallback/original returned HTML.
     throw new Error(
       'URL links to a webpage, not a media file. Provide a direct link.',
     );
   }
 
-  if (!headRes.ok) {
-    if (headRes.status === 404) {
-      throw new Error('Media file not found. Check the URL.');
-    } else if (headRes.status === 403) {
-      throw new Error(
-        'Access denied. The link may have expired or requires authentication.',
-      );
-    } else {
-      throw new Error(`Unable to access file (HTTP ${headRes.status}).`);
-    }
-  }
-
-  // Determine file size (support Content-Range for partial content responses)
-  let fileSize = 0;
-  const contentRange = headRes.headers.get('content-range');
-  if (contentRange) {
-    const match = contentRange.match(/\/(\d+)$/);
-    if (match) {
-      fileSize = parseInt(match[1], 10);
-    }
-  }
-
-  // Fallback to Content-Length if no Content-Range
   if (!fileSize) {
-    fileSize = parseInt(headRes.headers.get('content-length') ?? '0', 10);
+    fileSize = resolveResponseFileSize(response);
   }
 
-  if (!fileSize) throw new Error('Could not determine file size');
+  const supportsRemoteSeekReads = didHonorRangeRequest(response);
 
-  // 2. Determine Filename
-  let filename = targetUrl;
-  const contentDisposition = headRes.headers.get('content-disposition');
-  if (contentDisposition) {
-    const starMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
-    if (starMatch && starMatch[1]) {
-      try {
-        filename = decodeURIComponent(starMatch[1]);
-      } catch {
-        // failed to decode, keep original
-      }
-    } else {
-      const normalMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
-      if (normalMatch && normalMatch[1]) {
-        filename = normalMatch[1];
-      }
-    }
-  }
-  diagnostics.resolvedFilename = filename;
-
-  // Determine if the file is an archive by extension
-  const ext = path.posix.extname(filename).toLowerCase();
-  const isArchive = isArchiveExtension(ext);
-
-  // 3. Fetch Content Chunk
-  const fetchEnd = Math.min(chunkSize - 1, fileSize - 1);
-
-  const tFetch = performance.now();
-  const response = await fetch(targetUrl, {
-    headers: getEmulationHeaders(`bytes=0-${fetchEnd}`),
-    redirect: 'follow',
-  });
-  diagnostics.fetchRequestDurationMs = Math.round(performance.now() - tFetch);
-  diagnostics.responseStatus = response.status;
-
-  const SAFE_LIMIT = 10 * 1024 * 1024; // 10MB "Eco Mode" limit
-  const tempBuffer = new Uint8Array(SAFE_LIMIT); // Pre-allocate: Zero GC overhead
-  let offset = 0;
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('Failed to retrieve response body stream');
-
-  // Check for Zip Header to transparently decompress Deflate streams
-  // Only decompress if the file extension indicates an archive format
-  const ZIP_SIG = [0x50, 0x4b, 0x03, 0x04];
-
-  // Read with a timeout to avoid hanging on misbehaving servers
-  const STREAM_TIMEOUT_MS = 30_000;
-  let firstChunk: Uint8Array | null = null;
-  {
-    const readPromise = reader.read();
-    const timeoutPromise = new Promise<{ done: true; value: undefined }>(
-      (_, reject) =>
-        setTimeout(
-          () => reject(new Error('Stream read timeout')),
-          STREAM_TIMEOUT_MS,
-        ),
+  if (filenameSource === 'url') {
+    const getFilename = parseContentDispositionFilename(
+      response.headers.get('content-disposition'),
     );
-    const { done, value } = await Promise.race([
-      readPromise,
-      timeoutPromise,
-    ]);
-    if (!done && value) {
-      firstChunk = value;
+    if (getFilename) {
+      filename = getFilename;
+      filenameSource = 'content-disposition-get';
+      diagnostics.resolvedFilename = filename;
+      diagnostics.resolvedFilenameSource = filenameSource;
     }
   }
 
-  let finalReader = reader;
-  let isZipCompressed = false;
-  let innerFilename: string | undefined;
-
-  // Verify Zip Signature (only for archive files)
-  if (
-    isArchive &&
-    firstChunk &&
-    firstChunk.length > 30 &&
-    firstChunk[0] === ZIP_SIG[0] &&
-    firstChunk[1] === ZIP_SIG[1] &&
-    firstChunk[2] === ZIP_SIG[2] &&
-    firstChunk[3] === ZIP_SIG[3]
-  ) {
-    // Check compression method at offset 8 (2 bytes, little endian)
-    const compressionMethod = firstChunk[8] | (firstChunk[9] << 8);
-
-    // Method 8 is DEFLATE. Method 0 is STORED.
-    if (compressionMethod === 8) {
-      // Zip Deflate detected: Create a DecompressionStream to unzip on-the-fly.
-      isZipCompressed = true;
-
-      // Parse local file header to find where the compressed data starts
-      const fileNameLength = firstChunk[26] | (firstChunk[27] << 8);
-      const extraFieldLength = firstChunk[28] | (firstChunk[29] << 8);
-      const dataOffset = 30 + fileNameLength + extraFieldLength;
-
-      // Capture inner filename from zip header
-      if (fileNameLength > 0) {
-        const nameBytes = firstChunk.subarray(30, 30 + fileNameLength);
-        innerFilename = new TextDecoder().decode(nameBytes);
-      }
-
-      // Ensure we have enough data in the first chunk to strip the header
-      if (firstChunk.length > dataOffset) {
-        const dataInFirstChunk = firstChunk.subarray(dataOffset);
-
-        // 1. Create a stream that emits the rest of the first chunk (minus header) + the original stream
-        const rawCompressedStream = new ReadableStream({
-          start(controller) {
-            if (dataInFirstChunk.byteLength > 0) {
-              controller.enqueue(dataInFirstChunk);
-            }
-          },
-          async pull(controller) {
-            const { done, value } = await reader.read();
-            if (done) {
-              controller.close();
-            } else {
-              controller.enqueue(value);
-            }
-          },
-          cancel() {
-            reader.cancel();
-          },
-        });
-
-        // 2. Pipe through DecompressionStream to get raw media data
-        const decompressor = new DecompressionStream('deflate-raw');
-        finalReader = rawCompressedStream.pipeThrough(decompressor).getReader();
-
-        // firstChunk is now consumed by the new stream pipeline
-        firstChunk = null;
-      }
-    }
-  }
-
+  let rawBuffer: Uint8Array;
   try {
-    // If strict zip decompression was not applied (not zip, or stored zip, or error),
-    // process the pending firstChunk manually.
-    if (firstChunk) {
-      const spaceLeft = SAFE_LIMIT - offset;
-      if (firstChunk.byteLength > spaceLeft) {
-        tempBuffer.set(firstChunk.subarray(0, spaceLeft), offset);
-        offset += spaceLeft;
+    rawBuffer = await readStreamIntoBuffer(reader, firstChunk, SAFE_LIMIT);
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    diagnostics.streamCloseError = errorMessage;
+    diagnostics.totalDurationMs = Math.round(performance.now() - tStart);
+    throw new DiagnosticsError(
+      `Stream reading failed: ${errorMessage}`,
+      diagnostics,
+      err,
+    );
+  }
 
-        // If buffer full from just the first chunk, close the original reader.
-        // We only cancel the original reader if we didn't upgrade to a decompression pipeline,
-        // because the decompression pipeline manages the original reader's lifecycle.
-        if (!isZipCompressed) await reader.cancel();
-      } else {
-        tempBuffer.set(firstChunk, offset);
-        offset += firstChunk.byteLength;
-      }
-    }
+  let archiveEntry: ArchiveEntryInspection | undefined;
+  const shouldCheckArchive =
+    rawBuffer.byteLength > 0 &&
+    (!filename || isArchiveExtension(filename) || isGoogleDrive);
 
-    // Now read the rest
-    if (offset < SAFE_LIMIT) {
-      while (true) {
-        const { done, value } = await finalReader.read();
-        if (done) break;
-
-        const spaceLeft = SAFE_LIMIT - offset;
-
-        if (value.byteLength > spaceLeft) {
-          tempBuffer.set(value.subarray(0, spaceLeft), offset);
-          offset += spaceLeft;
-          await finalReader.cancel();
-          break;
-        } else {
-          tempBuffer.set(value, offset);
-          offset += value.byteLength;
+  if (shouldCheckArchive) {
+    const initialArchiveEntry = inspectArchiveEntry(rawBuffer);
+    if (initialArchiveEntry) {
+      archiveEntry = initialArchiveEntry;
+      if (
+        archiveEntry.archiveKind === 'zip' &&
+        archiveEntry.sizeStatus === 'estimated' &&
+        fileSize !== undefined &&
+        supportsRemoteSeekReads
+      ) {
+        const tailBuffer = await fetchZipTailBuffer(targetUrl, fileSize);
+        const tailResolvedEntry = tailBuffer
+          ? inspectArchiveEntry(rawBuffer, { tailBuffer })
+          : null;
+        if (tailResolvedEntry) {
+          archiveEntry = tailResolvedEntry;
         }
       }
     }
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+  }
 
-    // DecompressionStream throws if the stream ends while expecting more data (valid for partial fetches)
+  let analysisBuffer = rawBuffer;
+  if (archiveEntry) {
+    diagnostics.resolvedFilename = archiveEntry.name;
+    diagnostics.resolvedFilenameSource = 'archive-inner';
+
+    const extractedPrefix = await extractArchivePrefix(rawBuffer, archiveEntry);
+    if (extractedPrefix && extractedPrefix.byteLength > 0) {
+      analysisBuffer = extractedPrefix;
+    }
+
     if (
-      offset > 0 &&
-      (errorMessage.includes('incomplete data') ||
-        errorMessage.includes('unexpected end of file'))
+      archiveEntry.sizeStatus === 'verified' &&
+      archiveEntry.uncompressedSize !== undefined
     ) {
-      // We got some data before the stream ended/failed, which is expected for partial zip chunks.
-      // Sallow the error and return what we have.
-    } else {
-      // Stream failed really, propagate error to be caught by main handler
-      throw new Error(`Stream reading failed: ${errorMessage}`);
+      fileSize = archiveEntry.uncompressedSize;
     }
   }
 
-  // Create a view of the actual data we read (no copy)
-  const fileBuffer = tempBuffer.subarray(0, offset);
-
-  // Generate SHA-256 integrity hash
   let sha256: string | undefined;
   try {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', fileBuffer);
+    const hashBuffer = await crypto.subtle.digest(
+      'SHA-256',
+      new Uint8Array(analysisBuffer),
+    );
     sha256 = Array.from(new Uint8Array(hashBuffer))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   } catch {
-    // Digest not critical, ignore in edge environments
+    // Digest is useful but non-critical.
   }
 
   diagnostics.totalDurationMs = Math.round(performance.now() - tStart);
-  diagnostics.sha256 = sha256;
-  diagnostics.isArchive = isArchive;
-  diagnostics.isZipCompressed = isZipCompressed;
-  if (innerFilename) diagnostics.innerFilename = innerFilename;
 
   const result: MediaFetchResult = {
-    buffer: fileBuffer,
-    filename: innerFilename ?? filename,
+    buffer: analysisBuffer,
+    byteSource: archiveEntry
+      ? undefined
+      : supportsRemoteSeekReads
+        ? createRemoteByteSource(targetUrl, rawBuffer, fileSize, diagnostics)
+        : undefined,
+    filename,
+    filenameSource,
     fileSize,
     diagnostics: diagnostics as FetchDiagnostics,
+    sha256,
+    innerFilename:
+      diagnostics.resolvedFilename === filename
+        ? undefined
+        : diagnostics.resolvedFilename,
+    archiveEntry,
   };
 
-  // Emit fetch completion event
   fastLinkEmitter.emit('fetch:complete', {
-    filename: result.filename,
-    fileSize,
-    sha256,
-    isArchive,
-    isZipCompressed,
+    filename: result.innerFilename ?? result.filename,
+    fileSize: result.fileSize ?? result.buffer.byteLength,
+    sha256: result.sha256,
+    isArchive: Boolean(result.archiveEntry),
+    isZipCompressed:
+      result.archiveEntry?.archiveKind === 'zip' &&
+      result.archiveEntry.compression === 'deflate',
     durationMs: diagnostics.totalDurationMs,
   });
 
