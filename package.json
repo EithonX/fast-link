@@ -57,7 +57,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "globals": "^17.0.0",
-    "lucide-react": "^0.562.0",
+    "lucide-react": "^0.577.0",
     "prettier": "^3.7.4",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "tailwindcss": "^4.1.18",
