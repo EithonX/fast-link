@@ -4,6 +4,16 @@
     "config:recommended",
     ":disableDependencyDashboard"
   ],
-  "automerge": true,
-  "platformAutomerge": true
+  "automergeType": "pr",
+  "ignoreTests": true,
+  "platformAutomerge": false,
+  "packageRules": [
+    {
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true
+    }
+  ]
 }
