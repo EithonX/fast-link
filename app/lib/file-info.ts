@@ -1,3 +1,4 @@
+import { parseContentDispositionFilename } from './filename-resolution';
 import { getEmulationHeaders } from './server-utils';
 
 export interface FileInfo {
@@ -5,6 +6,34 @@ export interface FileInfo {
   size: number;
   type: string;
 }
+
+const MIME_TYPES_BY_EXTENSION: Record<string, string> = {
+  mp4: 'video/mp4',
+  mkv: 'video/x-matroska',
+  webm: 'video/webm',
+  avi: 'video/x-msvideo',
+  mov: 'video/quicktime',
+  mp3: 'audio/mpeg',
+  flac: 'audio/flac',
+  wav: 'audio/wav',
+  zip: 'application/zip',
+  rar: 'application/x-rar-compressed',
+  '7z': 'application/x-7z-compressed',
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+};
+
+const PLACEHOLDER_FILENAME_PATTERNS = [
+  /^downloaded_file$/i,
+  /^file$/i,
+  /^download$/i,
+  /^findpath$/i,
+  /^\d+:findpath$/i,
+];
 
 /**
  * Format bytes to human-readable size
@@ -17,175 +46,220 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-/**
- * Extract filename from Content-Disposition header
- */
-function extractFilename(contentDisposition: string | null): string {
-  if (!contentDisposition) return '';
+function isHtmlContentType(contentType: string): boolean {
+  return contentType.toLowerCase().includes('text/html');
+}
 
-  // Try filename*=UTF-8'' first (RFC 5987)
-  const starMatch = contentDisposition.match(
-    /filename\*=UTF-8''([^;]+)|filename="([^"]+)"|filename=([^;]+)/i,
+function isPlaceholderFilename(filename: string): boolean {
+  const normalized = filename.trim().toLowerCase();
+  if (!normalized) return true;
+  return PLACEHOLDER_FILENAME_PATTERNS.some((pattern) =>
+    pattern.test(normalized),
   );
-  if (starMatch) {
-    const raw = starMatch[1] || starMatch[2] || starMatch[3] || '';
-    try {
-      return decodeURIComponent(raw).replace(/^["']|["']$/g, '');
-    } catch {
-      return raw.replace(/^["']|["']$/g, '');
-    }
+}
+
+function extractUrlPathFilename(url: string): string {
+  try {
+    const parsedUrl = new URL(url);
+    const pathPart = parsedUrl.pathname.substring(
+      parsedUrl.pathname.lastIndexOf('/') + 1,
+    );
+    return pathPart ? decodeURIComponent(pathPart) : '';
+  } catch {
+    return '';
   }
-  return '';
+}
+
+function inferMimeTypeFromFilename(filename: string): string | undefined {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return ext ? MIME_TYPES_BY_EXTENSION[ext] : undefined;
+}
+
+function parseSize(contentLength: string): number {
+  const parsed = parseInt(contentLength || '0', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+async function deepProbeFileInfo(
+  targetUrl: string,
+  currentFilename: string,
+): Promise<Partial<FileInfo>> {
+  try {
+    const { fetchMediaChunk } = await import('~/services/media-fetch.server');
+    const fetchResult = await fetchMediaChunk(targetUrl);
+
+    const probeInfo: Partial<FileInfo> = {};
+    const fetchedFilename = fetchResult.innerFilename || fetchResult.filename;
+
+    if (fetchResult.fileSize && fetchResult.fileSize > 0) {
+      probeInfo.size = fetchResult.fileSize;
+    }
+
+    if (fetchedFilename && !isPlaceholderFilename(fetchedFilename)) {
+      probeInfo.filename = fetchedFilename;
+    }
+
+    const shouldAnalyzeForFilename =
+      (!probeInfo.filename || isPlaceholderFilename(probeInfo.filename)) &&
+      isPlaceholderFilename(currentFilename);
+
+    if (shouldAnalyzeForFilename) {
+      const { analyzeMediaBuffer } = await import('~/services/mediainfo.server');
+      const analysis = await analyzeMediaBuffer(
+        fetchResult.buffer,
+        fetchResult.fileSize,
+        fetchedFilename || currentFilename || 'downloaded_file',
+        fetchResult.filenameSource,
+        ['object'],
+        fetchResult.archiveEntry,
+        fetchResult.byteSource?.readChunk,
+      );
+
+      if (
+        analysis.resolvedFilename &&
+        !isPlaceholderFilename(analysis.resolvedFilename)
+      ) {
+        probeInfo.filename = analysis.resolvedFilename;
+      }
+    }
+
+    return probeInfo;
+  } catch {
+    return {};
+  }
 }
 
 /**
- * Fetch file metadata via HEAD request with GET fallback
+ * Fetch file metadata via HEAD/GET requests with deep probe fallback for
+ * resolver-style links (for example `.../0:findpath?id=...`).
  */
 export async function getFileInfo(targetUrl: string): Promise<FileInfo> {
   const headers = getEmulationHeaders();
 
-  let response: Response | undefined;
-  let finalUrl = targetUrl; // Track the final URL after redirects
-  
+  let finalUrl = targetUrl;
   let contentLength = '';
   let contentDisposition = '';
   let contentType = '';
-  
+
   // First try: HEAD request to original URL (follows redirects)
   try {
-    response = await fetch(targetUrl, {
+    const response = await fetch(targetUrl, {
       method: 'HEAD',
       headers,
       redirect: 'follow',
     });
-    // Get the final URL after redirects
-    if (response?.url) {
+
+    if (response.url) {
       finalUrl = response.url;
     }
-    if (response?.ok) {
+
+    if (response.ok) {
       contentLength = response.headers.get('content-length') || '';
       contentDisposition = response.headers.get('content-disposition') || '';
       contentType = response.headers.get('content-type') || '';
-      
-      // Try content-range for size
-      const cr = response.headers.get('content-range');
-      const totalMatch = cr?.match(/\/(\d+)\s*$/);
+
+      const contentRange = response.headers.get('content-range');
+      const totalMatch = contentRange?.match(/\/(\d+)\s*$/);
       if (totalMatch && !contentLength) contentLength = totalMatch[1];
     }
   } catch {
-    // Ignore, will try fallback
+    // Ignore and try fallback probes.
   }
 
-  // Second try: If still missing size/type and we have a different final URL, try HEAD on that
+  // Second try: If we have a redirected URL, probe it directly.
   if (finalUrl !== targetUrl && (!contentLength || !contentType)) {
     try {
-      const finalResp = await fetch(finalUrl, {
+      const finalResponse = await fetch(finalUrl, {
         method: 'HEAD',
         headers,
-        redirect: 'manual', // Don't follow further redirects
+        redirect: 'manual',
       });
-      if (finalResp?.ok) {
-        contentLength = contentLength || finalResp.headers.get('content-length') || '';
-        contentDisposition = contentDisposition || finalResp.headers.get('content-disposition') || '';
-        contentType = contentType || finalResp.headers.get('content-type') || '';
-        
-        const cr = finalResp.headers.get('content-range');
-        const totalMatch = cr?.match(/\/(\d+)\s*$/);
+
+      if (finalResponse.ok) {
+        contentLength =
+          contentLength || finalResponse.headers.get('content-length') || '';
+        contentDisposition =
+          contentDisposition ||
+          finalResponse.headers.get('content-disposition') ||
+          '';
+        contentType = contentType || finalResponse.headers.get('content-type') || '';
+
+        const contentRange = finalResponse.headers.get('content-range');
+        const totalMatch = contentRange?.match(/\/(\d+)\s*$/);
         if (totalMatch && !contentLength) contentLength = totalMatch[1];
       }
     } catch {
-      // Ignore
+      // Ignore and try fallback probes.
     }
   }
 
-  // Third try: If still missing, try a Range GET request
+  // Third try: Range GET often returns reliable content-range totals.
   if (!contentLength || !contentType) {
     try {
-      const getResp = await fetch(finalUrl || targetUrl, {
+      const getResponse = await fetch(finalUrl || targetUrl, {
         method: 'GET',
         headers: getEmulationHeaders('bytes=0-0'),
         redirect: 'follow',
       });
-      if (getResp.ok || getResp.status === 206) {
-        // Update final URL from GET response as well
-        if (getResp.url) {
-          finalUrl = getResp.url;
-        }
-        contentLength = contentLength || getResp.headers.get('content-length') || '';
-        contentDisposition = contentDisposition || getResp.headers.get('content-disposition') || '';
-        contentType = contentType || getResp.headers.get('content-type') || '';
 
-        // Try content-range total - this is often the most reliable for size
-        const cr = getResp.headers.get('content-range');
-        const totalMatch = cr?.match(/\/(\d+)\s*$/);
+      if (getResponse.ok || getResponse.status === 206) {
+        if (getResponse.url) {
+          finalUrl = getResponse.url;
+        }
+
+        contentLength = contentLength || getResponse.headers.get('content-length') || '';
+        contentDisposition =
+          contentDisposition ||
+          getResponse.headers.get('content-disposition') ||
+          '';
+        contentType = contentType || getResponse.headers.get('content-type') || '';
+
+        const contentRange = getResponse.headers.get('content-range');
+        const totalMatch = contentRange?.match(/\/(\d+)\s*$/);
         if (totalMatch) contentLength = totalMatch[1];
       }
     } catch {
-      // Ignore
+      // Ignore and continue with collected metadata.
     }
   }
 
-  // Extract filename from Content-Disposition
-  let filename = extractFilename(contentDisposition || null);
-
-  // Fallback to final URL path (after redirects)
+  // Resolve filename from headers first, then URL path fallbacks.
+  let filename = parseContentDispositionFilename(contentDisposition) || '';
   if (!filename) {
-    try {
-      const parsedUrl = new URL(finalUrl);
-      const pathPart = parsedUrl.pathname.substring(
-        parsedUrl.pathname.lastIndexOf('/') + 1,
-      );
-      if (pathPart) filename = decodeURIComponent(pathPart);
-    } catch {
-      // Ignore
-    }
+    filename = extractUrlPathFilename(finalUrl);
   }
-
-  // If still no filename, try the original URL as last resort
   if (!filename) {
-    try {
-      const parsedUrl = new URL(targetUrl);
-      const pathPart = parsedUrl.pathname.substring(
-        parsedUrl.pathname.lastIndexOf('/') + 1,
-      );
-      if (pathPart) filename = decodeURIComponent(pathPart);
-    } catch {
-      // Ignore
+    filename = extractUrlPathFilename(targetUrl);
+  }
+
+  let size = parseSize(contentLength);
+
+  // Deep probe fallback for resolver pages and placeholder-style names.
+  const shouldDeepProbe =
+    size === 0 || isPlaceholderFilename(filename) || isHtmlContentType(contentType);
+
+  if (shouldDeepProbe) {
+    const deepProbe = await deepProbeFileInfo(targetUrl, filename);
+    if (deepProbe.filename && !isPlaceholderFilename(deepProbe.filename)) {
+      filename = deepProbe.filename;
+    }
+    if (typeof deepProbe.size === 'number' && deepProbe.size > 0) {
+      size = deepProbe.size;
     }
   }
 
-  // Try to infer content type from filename extension if still missing
-  if (!contentType && filename) {
-    const ext = filename.split('.').pop()?.toLowerCase();
-    const mimeTypes: Record<string, string> = {
-      'mp4': 'video/mp4',
-      'mkv': 'video/x-matroska',
-      'webm': 'video/webm',
-      'avi': 'video/x-msvideo',
-      'mov': 'video/quicktime',
-      'mp3': 'audio/mpeg',
-      'flac': 'audio/flac',
-      'wav': 'audio/wav',
-      'zip': 'application/zip',
-      'rar': 'application/x-rar-compressed',
-      '7z': 'application/x-7z-compressed',
-      'pdf': 'application/pdf',
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'webp': 'image/webp',
-    };
-    if (ext && mimeTypes[ext]) {
-      contentType = mimeTypes[ext];
-    }
+  if (!filename) {
+    filename = 'downloaded_file';
   }
 
-  if (!filename) filename = 'downloaded_file';
+  const inferredType = inferMimeTypeFromFilename(filename);
+  if ((!contentType || isHtmlContentType(contentType)) && inferredType) {
+    contentType = inferredType;
+  }
 
   return {
     filename,
-    size: parseInt(contentLength || '0', 10),
+    size,
     type: contentType,
   };
 }

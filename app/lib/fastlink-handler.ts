@@ -247,7 +247,9 @@ async function handleTelegramRoute(
     }
 
     // Generate fast link
-    const baseUrl = env.WORKER_BASE_URL || '';
+    const requestOrigin = new URL(request.url).origin;
+    const configuredBase = env.WORKER_BASE_URL?.trim() || '';
+    const baseUrl = (configuredBase || requestOrigin).replace(/\/+$/, '');
     let fastLink =
       baseUrl + '/p/' + encodeURIComponent(btoa(inputUrl));
     if (fileInfo.filename) {
