@@ -96,4 +96,62 @@ describe('getFileInfo', () => {
       type: 'video/mp4',
     });
   });
+
+  it('resolves findpath redirect metadata without invoking media probe fallback', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        // Initial HEAD probe (follow redirects): returns HTML without metadata.
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(null, {
+            status: 200,
+            headers: {
+              'content-type': 'text/html; charset=utf-8',
+            },
+          }),
+        )
+        // Range GET probe (follow redirects): still HTML/no metadata.
+        .mockResolvedValueOnce(
+          new Response(null, {
+            status: 200,
+            headers: {
+              'content-type': 'text/html; charset=utf-8',
+            },
+          }),
+        )
+        // Manual redirect probe: exposes filename in location.
+        .mockResolvedValueOnce(
+          new Response(null, {
+            status: 302,
+            headers: {
+              location:
+                'https://testusenet.scloudx.qzz.io/0:/Majka%20Mara%20(2024)%20-%20Doma%C4%87i%20film%20480p%20836.mp4',
+            },
+          }),
+        )
+        // HEAD on redirected URL: exposes content-length/type.
+        .mockResolvedValueOnce(
+          new Response(null, {
+            status: 200,
+            headers: {
+              'content-length': '641353422',
+              'content-type': 'video/mp4',
+            },
+          }),
+        ),
+    );
+
+    const info = await getFileInfo(
+      'https://testusenet.scloudx.qzz.io/0:findpath?id=abc123',
+    );
+
+    expect(info).toEqual({
+      filename: 'Majka Mara (2024) - Domaći film 480p 836.mp4',
+      size: 641353422,
+      type: 'video/mp4',
+    });
+    expect(fetchMediaChunkMock).not.toHaveBeenCalled();
+    expect(analyzeMediaBufferMock).not.toHaveBeenCalled();
+  });
 });

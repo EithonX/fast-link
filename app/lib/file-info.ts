@@ -80,6 +80,93 @@ function parseSize(contentLength: string): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+interface RedirectProbeResult {
+  filename?: string;
+  size?: number;
+  type?: string;
+}
+
+function resolveRedirectLocation(
+  location: string | null,
+  baseUrl: string,
+): string | null {
+  if (!location) return null;
+  try {
+    return new URL(location, baseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+async function probeManualRedirectMetadata(
+  targetUrl: string,
+): Promise<RedirectProbeResult> {
+  const methods: Array<'GET' | 'HEAD'> = ['GET', 'HEAD'];
+
+  for (const method of methods) {
+    try {
+      const probeResponse = await fetch(targetUrl, {
+        method,
+        headers:
+          method === 'GET'
+            ? getEmulationHeaders('bytes=0-0')
+            : getEmulationHeaders(),
+        redirect: 'manual',
+      });
+
+      const location = resolveRedirectLocation(
+        probeResponse.headers.get('location'),
+        targetUrl,
+      );
+      if (!location) continue;
+
+      const probe: RedirectProbeResult = {};
+      const locationFilename = extractUrlPathFilename(location);
+      if (locationFilename && !isPlaceholderFilename(locationFilename)) {
+        probe.filename = locationFilename;
+      }
+
+      const redirectedHead = await fetch(location, {
+        method: 'HEAD',
+        headers: getEmulationHeaders(),
+        redirect: 'follow',
+      });
+
+      if (redirectedHead.ok) {
+        const redirectedSize = parseSize(
+          redirectedHead.headers.get('content-length') || '',
+        );
+        if (redirectedSize > 0) {
+          probe.size = redirectedSize;
+        }
+
+        const redirectedType = redirectedHead.headers.get('content-type') || '';
+        if (redirectedType) {
+          probe.type = redirectedType;
+        }
+
+        const redirectedDispositionFilename = parseContentDispositionFilename(
+          redirectedHead.headers.get('content-disposition'),
+        );
+        if (
+          redirectedDispositionFilename &&
+          !isPlaceholderFilename(redirectedDispositionFilename)
+        ) {
+          probe.filename = redirectedDispositionFilename;
+        }
+      }
+
+      if (probe.filename || probe.size || probe.type) {
+        return probe;
+      }
+    } catch {
+      // Ignore and continue with next probe method.
+    }
+  }
+
+  return {};
+}
+
 async function deepProbeFileInfo(
   targetUrl: string,
   currentFilename: string,
@@ -234,11 +321,28 @@ export async function getFileInfo(targetUrl: string): Promise<FileInfo> {
 
   let size = parseSize(contentLength);
 
-  // Deep probe fallback for resolver pages and placeholder-style names.
+  // Redirect probe fallback for resolver pages and placeholder-style names.
   const shouldDeepProbe =
     size === 0 || isPlaceholderFilename(filename) || isHtmlContentType(contentType);
 
   if (shouldDeepProbe) {
+    const redirectProbe = await probeManualRedirectMetadata(targetUrl);
+    if (redirectProbe.filename && !isPlaceholderFilename(redirectProbe.filename)) {
+      filename = redirectProbe.filename;
+    }
+    if (typeof redirectProbe.size === 'number' && redirectProbe.size > 0) {
+      size = redirectProbe.size;
+    }
+    if (redirectProbe.type) {
+      contentType = redirectProbe.type;
+    }
+  }
+
+  // Absolute fallback: media probe.
+  const shouldDeepProbeAfterRedirect =
+    size === 0 || isPlaceholderFilename(filename) || isHtmlContentType(contentType);
+
+  if (shouldDeepProbeAfterRedirect) {
     const deepProbe = await deepProbeFileInfo(targetUrl, filename);
     if (deepProbe.filename && !isPlaceholderFilename(deepProbe.filename)) {
       filename = deepProbe.filename;
