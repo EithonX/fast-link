@@ -1,8 +1,7 @@
-import type { ArchiveEntryInspection } from '~/lib/archive-inspection';
-import type { MediaInfoResult } from '~/services/mediainfo.server';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ArchiveEntryInspection } from '~/lib/archive-inspection';
+import type { MediaInfoResult } from '~/services/mediainfo.server';
 import { analyzeMediaBuffer } from '~/services/mediainfo.server';
 
 let mockAnalyzeDataResult: MediaInfoResult = {

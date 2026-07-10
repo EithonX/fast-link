@@ -1,15 +1,7 @@
-import { createRequestHandler } from 'react-router';
+import { createRequestHandler, RouterContextProvider } from 'react-router';
 
+import { cloudflareContext } from '~/lib/cloudflare-context';
 import { handleFastLinkRoutes } from '~/lib/fastlink-handler';
-
-declare module 'react-router' {
-  export interface AppLoadContext {
-    cloudflare: {
-      env: Env;
-      ctx: ExecutionContext;
-    };
-  }
-}
 
 const requestHandler = createRequestHandler(
   () => import('virtual:react-router/server-build'),
@@ -149,8 +141,8 @@ export default {
     }
 
     // Default Remix handler
-    return requestHandler(request, {
-      cloudflare: { env, ctx },
-    });
+    const routerContext = new RouterContextProvider();
+    routerContext.set(cloudflareContext, { env, ctx });
+    return requestHandler(request, routerContext);
   },
 } satisfies ExportedHandler<Env>;

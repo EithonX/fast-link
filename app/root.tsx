@@ -17,6 +17,7 @@ import {
 } from 'remix-themes';
 
 import { Toaster } from '~/components/ui/sonner';
+import { cloudflareContext } from '~/lib/cloudflare-context';
 
 import type { Route } from './+types/root';
 import { createThemeSessionResolverWithSecret } from './sessions.server';
@@ -45,14 +46,15 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export async function loader({ request, context }: Route.LoaderArgs) {
+  const { env } = context.get(cloudflareContext);
   const { getTheme } = await createThemeSessionResolverWithSecret(
-    context.cloudflare.env.SESSION_SECRET,
+    env.SESSION_SECRET,
   )(request);
   return {
     theme: getTheme(),
     env: {
-      TURNSTILE_SITE_KEY: context.cloudflare.env.TURNSTILE_SITE_KEY,
-      ENABLE_TURNSTILE: context.cloudflare.env.ENABLE_TURNSTILE,
+      TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY,
+      ENABLE_TURNSTILE: env.ENABLE_TURNSTILE,
     },
   };
 }

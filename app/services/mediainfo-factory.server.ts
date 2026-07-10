@@ -2,7 +2,6 @@ import type { MediaInfo } from 'mediainfo.js';
 
 import mediaInfoFactory from '~/lib/mediainfo-bundle.js';
 
-// @ts-expect-error - Import collocated WASM module for bundling
 import wasmModule from './MediaInfoModule.wasm';
 
 export { type MediaInfo };
@@ -14,14 +13,18 @@ export { type MediaInfo };
  */
 export const createMediaInfo = async (): Promise<MediaInfo> => {
   return new Promise((resolve, reject) => {
-    mediaInfoFactory({
-      format: 'object',
-      // Explicitly pass the module (handled by our patched bundle)
-      wasmModule,
-    }, (mediainfo: MediaInfo) => {
-      resolve(mediainfo);
-    }, (err: unknown) => {
-      reject(err);
-    });
+    mediaInfoFactory(
+      {
+        format: 'object',
+        // Explicitly pass the module (handled by our patched bundle)
+        wasmModule,
+      },
+      (mediainfo: MediaInfo) => {
+        resolve(mediainfo);
+      },
+      (err: unknown) => {
+        reject(err);
+      },
+    );
   });
 };

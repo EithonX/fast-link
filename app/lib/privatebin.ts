@@ -1,5 +1,5 @@
-import { PrivateBinResponseSchema } from '~/lib/schemas/privatebin';
 import type { PrivateBinResponse } from '~/lib/schemas/privatebin';
+import { PrivateBinResponseSchema } from '~/lib/schemas/privatebin';
 
 const privateBinHost = 'https://privatebin.net';
 

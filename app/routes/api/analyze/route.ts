@@ -1,5 +1,6 @@
+import { cloudflareContext } from '~/lib/cloudflare-context';
 import { DiagnosticsError } from '~/lib/error-utils';
-import { type LogContext, log, requestStorage } from '~/lib/logger.server';
+import { log, type LogContext, requestStorage } from '~/lib/logger.server';
 import { analyzeSchema } from '~/lib/schemas';
 import { TurnstileResponseSchema } from '~/lib/schemas/turnstile';
 import { fastLinkEmitter } from '~/services/event-bus.server';
@@ -10,6 +11,7 @@ import { initTelemetry } from '~/services/telemetry.server';
 import type { Route } from './+types/route';
 
 export async function loader({ request, context }: Route.LoaderArgs) {
+  const { env } = context.get(cloudflareContext);
   // Ensure telemetry listeners are wired up
   initTelemetry();
 
@@ -45,12 +47,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       const turnstileToken = request.headers.get('CF-Turnstile-Response');
       const secretKey = import.meta.env.DEV
         ? '1x00000000000000000000AA'
-        : context.cloudflare.env.TURNSTILE_SECRET_KEY;
+        : env.TURNSTILE_SECRET_KEY;
 
-      if (
-        (context.cloudflare.env.ENABLE_TURNSTILE as string) === 'true' &&
-        secretKey
-      ) {
+      if (String(env.ENABLE_TURNSTILE) === 'true' && secretKey) {
         if (!turnstileToken) {
           status = 403;
           severity = 'WARNING';
@@ -102,8 +101,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
             });
             return Response.json(
               {
-                error:
-                  'Security check failed. Please refresh and try again.',
+                error: 'Security check failed. Please refresh and try again.',
               },
               { status: 403 },
             );

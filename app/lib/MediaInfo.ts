@@ -1,10 +1,10 @@
-import { unknownToError } from './error';
-import { FLOAT_FIELDS, INT_FIELDS } from './MediaInfoResult.js';
-
 import type {
   MediaInfoModule,
   MediaInfoModuleInstance,
 } from '~/types/mediainfo-wasm';
+
+import { unknownToError } from './error';
+import { FLOAT_FIELDS, INT_FIELDS } from './MediaInfoResult.js';
 
 const MAX_UINT32_PLUS_ONE = 2 ** 32;
 

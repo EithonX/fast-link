@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouteLoaderData } from 'react-router';
 import { Theme, useTheme } from 'remix-themes';
 
@@ -13,10 +13,6 @@ export function ModeToggle() {
     serverTheme,
   );
   const [, setTheme] = useTheme(); // useTheme used only for setting
-
-  useEffect(() => {
-    setThemeState(serverTheme);
-  }, [serverTheme]);
 
   return (
     <div className="border-input flex h-6 items-center rounded-lg border p-0.5 sm:h-7">

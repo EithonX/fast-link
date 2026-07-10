@@ -21,8 +21,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '~/components/ui/sheet';
-import { useHistory, type HistoryItem } from '~/hooks/use-history';
-import { cn } from '~/lib/utils';
+import { type HistoryItem, useHistory } from '~/hooks/use-history';
 
 function timeAgo(date: number) {
   const seconds = Math.floor((Date.now() - date) / 1000);
@@ -58,9 +57,7 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
       <SheetContent className="flex h-full w-full flex-col sm:max-w-md">
         <SheetHeader>
           <SheetTitle>History</SheetTitle>
-          <SheetDescription>
-            Your recent downloads.
-          </SheetDescription>
+          <SheetDescription>Your recent downloads.</SheetDescription>
         </SheetHeader>
 
         {history.length === 0 ? (
@@ -70,13 +67,13 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
             </div>
             <div className="space-y-2">
               <h3 className="font-semibold">No history yet</h3>
-              <p className="text-muted-foreground text-sm max-w-[200px]">
+              <p className="text-muted-foreground max-w-[200px] text-sm">
                 Generate a download link to see it appear here.
               </p>
             </div>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-hidden -mx-6">
+          <div className="-mx-6 min-h-0 flex-1 overflow-hidden">
             <ScrollArea className="h-full px-6">
               <div className="flex flex-col gap-4 py-4">
                 {history.map((item) => (
@@ -86,7 +83,7 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="grid gap-1">
-                        <h4 className="font-semibold leading-none break-all pr-8">
+                        <h4 className="pr-8 leading-none font-semibold break-all">
                           {item.filename}
                         </h4>
                         <p className="text-muted-foreground text-xs">
@@ -111,7 +108,7 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
                           <Badge
                             key={idx}
                             variant="secondary"
-                            className="text-[10px] px-1.5 py-0"
+                            className="px-1.5 py-0 text-[10px]"
                           >
                             {badge}
                           </Badge>

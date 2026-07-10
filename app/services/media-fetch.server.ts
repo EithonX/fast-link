@@ -4,8 +4,8 @@ import {
 } from '~/lib/archive-inspection';
 import { DiagnosticsError } from '~/lib/error-utils';
 import {
-  type FilenameSource,
   extractFilenameFromUrl,
+  type FilenameSource,
   parseContentDispositionFilename,
 } from '~/lib/filename-resolution';
 import {

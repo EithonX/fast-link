@@ -15,16 +15,25 @@ interface LoaderData {
   mediaType: 'video' | 'audio' | 'image' | 'pdf' | 'unknown';
 }
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   return [
-    { title: data?.filename ? `${data.filename} - FastLink` : 'Preview - FastLink' },
+    {
+      title: loaderData?.filename
+        ? `${loaderData.filename} - FastLink`
+        : 'Preview - FastLink',
+    },
     { name: 'description', content: 'Preview media file' },
   ];
 };
 
-export async function loader({ params, request }: LoaderFunctionArgs): Promise<LoaderData> {
+export async function loader({
+  params,
+  request,
+}: LoaderFunctionArgs): Promise<LoaderData> {
   const encoded = params.encoded || '';
-  const filename = params.filename ? decodeURIComponent(params.filename) : 'file';
+  const filename = params.filename
+    ? decodeURIComponent(params.filename)
+    : 'file';
 
   let originalUrl = '';
   try {
@@ -66,7 +75,9 @@ export async function loader({ params, request }: LoaderFunctionArgs): Promise<L
   let mediaType: LoaderData['mediaType'] = 'unknown';
 
   // Helper to determine media category from MIME type
-  const getCategoryFromType = (type: string): LoaderData['mediaType'] | 'unknown' => {
+  const getCategoryFromType = (
+    type: string,
+  ): LoaderData['mediaType'] | 'unknown' => {
     if (type.startsWith('video/')) return 'video';
     if (type.startsWith('audio/')) return 'audio';
     if (type.startsWith('image/')) return 'image';
@@ -80,11 +91,15 @@ export async function loader({ params, request }: LoaderFunctionArgs): Promise<L
   if (mediaType === 'unknown' && filename) {
     const ext = filename.split('.').pop()?.toLowerCase();
     if (ext) {
-      if (['mp4', 'mkv', 'webm', 'mov', 'avi', 'wmv', 'flv', 'm4v'].includes(ext)) {
+      if (
+        ['mp4', 'mkv', 'webm', 'mov', 'avi', 'wmv', 'flv', 'm4v'].includes(ext)
+      ) {
         mediaType = 'video';
       } else if (['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'].includes(ext)) {
         mediaType = 'audio';
-      } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
+      } else if (
+        ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)
+      ) {
         mediaType = 'image';
       } else if (ext === 'pdf') {
         mediaType = 'pdf';
@@ -122,7 +137,7 @@ export default function PreviewPage() {
               </div>
             </button>
             <div className="min-w-0 flex-1">
-              <h1 className="text-sm font-semibold sm:text-base break-all line-clamp-2">
+              <h1 className="line-clamp-2 text-sm font-semibold break-all sm:text-base">
                 {data.filename}
               </h1>
               <p className="text-muted-foreground text-[10px] sm:text-xs">
@@ -209,7 +224,9 @@ export default function PreviewPage() {
                 <Link2 className="text-muted-foreground h-6 w-6 sm:h-7 sm:w-7" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold sm:text-base">{data.filename}</h2>
+                <h2 className="text-sm font-semibold sm:text-base">
+                  {data.filename}
+                </h2>
                 <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
                   Preview not available
                 </p>

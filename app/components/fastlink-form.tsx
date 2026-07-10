@@ -14,8 +14,6 @@ import {
   Info,
   Link2,
   Loader2,
-  Moon,
-  Sun,
   X,
   Zap,
 } from 'lucide-react';
@@ -35,7 +33,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { useHapticFeedback } from '~/hooks/use-haptic';
-import { useHistory, type HistoryItem } from '~/hooks/use-history';
+import { type HistoryItem, useHistory } from '~/hooks/use-history';
 import { cn } from '~/lib/utils';
 
 import { ModeToggle } from './mode-toggle';
@@ -128,8 +126,6 @@ export function FastLinkForm() {
       isAnalyzing: false,
       url,
     });
-
-
 
     try {
       const infoResponse = await fetch(`/info?url=${encodeURIComponent(url)}`);
@@ -257,7 +253,10 @@ export function FastLinkForm() {
       const items: { label: string; value: string }[] = [];
 
       if (video?.Width && video?.Height) {
-        items.push({ label: 'Resolution', value: `${video.Width}×${video.Height}` });
+        items.push({
+          label: 'Resolution',
+          value: `${video.Width}×${video.Height}`,
+        });
       }
       if (video?.Format) {
         items.push({ label: 'Video', value: video.Format });
@@ -268,7 +267,10 @@ export function FastLinkForm() {
       if (general?.Duration) {
         const mins = Math.floor(Number(general.Duration) / 60);
         const secs = Math.floor(Number(general.Duration) % 60);
-        items.push({ label: 'Duration', value: `${mins}:${String(secs).padStart(2, '0')}` });
+        items.push({
+          label: 'Duration',
+          value: `${mins}:${String(secs).padStart(2, '0')}`,
+        });
       }
       if (general?.OverallBitRate) {
         items.push({
@@ -312,7 +314,7 @@ export function FastLinkForm() {
   return (
     <div className="flex min-h-screen flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-[60] w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-[60] w-full border-b backdrop-blur">
         <div className="container mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <a
             href="/"
@@ -378,7 +380,7 @@ export function FastLinkForm() {
                       Link from Clipboard
                     </span>
                     <div className="flex w-full items-center justify-between gap-2">
-                      <span className="line-clamp-2 break-all text-sm font-medium">
+                      <span className="line-clamp-2 text-sm font-medium break-all">
                         {clipboardUrl}
                       </span>
                       <ArrowRight className="text-muted-foreground group-hover:text-foreground h-4 w-4 shrink-0 -rotate-45 transition-colors group-hover:rotate-0" />
@@ -402,10 +404,10 @@ export function FastLinkForm() {
                   required
                   onFocus={checkClipboard}
                   className={cn(
-                    'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-11 w-full rounded-lg border px-4 pr-10 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 transition-colors',
+                    'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-11 w-full rounded-lg border px-4 pr-10 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
                     inputUrl &&
                       !isValidUrl &&
-                      'border-destructive focus-visible:ring-destructive'
+                      'border-destructive focus-visible:ring-destructive',
                   )}
                 />
                 {inputUrl && (
@@ -419,7 +421,7 @@ export function FastLinkForm() {
                         inputRef.current.focus();
                       }
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-sm hover:bg-muted"
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted absolute top-1/2 right-3 -translate-y-1/2 rounded-sm p-0.5 transition-colors"
                     title="Clear URL"
                   >
                     <X className="h-4 w-4" />
@@ -499,8 +501,12 @@ export function FastLinkForm() {
                           {getHost(state.url)}
                         </span>
                         {state.fileInfo.type && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                            {state.fileInfo.type.split('/')[1]?.toUpperCase() || state.fileInfo.type}
+                          <Badge
+                            variant="secondary"
+                            className="px-1.5 py-0 text-[10px]"
+                          >
+                            {state.fileInfo.type.split('/')[1]?.toUpperCase() ||
+                              state.fileInfo.type}
                           </Badge>
                         )}
                       </div>
@@ -509,12 +515,12 @@ export function FastLinkForm() {
 
                   {/* Fast Link */}
                   <div className="space-y-3 pt-2">
-                    <div className="flex flex-col items-center gap-1.5 text-xs font-medium text-muted-foreground sm:flex-row sm:justify-center">
+                    <div className="text-muted-foreground flex flex-col items-center gap-1.5 text-xs font-medium sm:flex-row sm:justify-center">
                       <Link2 className="h-3 w-3" />
                       Fast Link
                     </div>
-                    <div className="bg-muted mx-auto max-w-lg rounded-lg border p-3 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none]">
-                      <code className="block whitespace-nowrap text-xs sm:text-sm select-all">
+                    <div className="bg-muted mx-auto max-w-lg scrollbar-none overflow-x-auto rounded-lg border p-3 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                      <code className="block text-xs whitespace-nowrap select-all sm:text-sm">
                         {state.fastLink}
                       </code>
                     </div>
@@ -523,16 +529,20 @@ export function FastLinkForm() {
                         variant={copied ? 'default' : 'secondary'}
                         size="sm"
                         onClick={copyToClipboard}
-                        className="flex-1 gap-2 text-xs sm:flex-none sm:min-w-[100px]"
+                        className="flex-1 gap-2 text-xs sm:min-w-[100px] sm:flex-none"
                       >
-                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copied ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
                         {copied ? 'Copied!' : 'Copy'}
                       </Button>
                       <Button
                         variant="secondary"
                         size="sm"
                         onClick={() => window.open(state.fastLink, '_blank')}
-                        className="flex-1 gap-2 text-xs sm:flex-none sm:min-w-[120px]"
+                        className="flex-1 gap-2 text-xs sm:min-w-[120px] sm:flex-none"
                       >
                         <Download className="h-3.5 w-3.5" />
                         Download
@@ -545,10 +555,12 @@ export function FastLinkForm() {
                             '/view/' +
                             encodeURIComponent(btoa(state.url)) +
                             '/' +
-                            encodeURIComponent(state.fileInfo?.filename || 'file');
+                            encodeURIComponent(
+                              state.fileInfo?.filename || 'file',
+                            );
                           window.open(viewerUrl, '_blank');
                         }}
-                        className="flex-1 gap-2 text-xs sm:flex-none sm:min-w-[100px]"
+                        className="flex-1 gap-2 text-xs sm:min-w-[100px] sm:flex-none"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                         Preview
@@ -558,20 +570,26 @@ export function FastLinkForm() {
 
                   {/* Media Summary */}
                   {state.isAnalyzing ? (
-                    <div className="flex justify-center items-center gap-2 pt-2 text-xs text-muted-foreground">
+                    <div className="text-muted-foreground flex items-center justify-center gap-2 pt-2 text-xs">
                       <Loader2 className="h-3 w-3 animate-spin" />
                       Analyzing media...
                     </div>
                   ) : mediaSummary ? (
                     <div className="space-y-3 pt-2">
-                      <div className="flex flex-col items-center gap-1.5 text-xs font-medium text-muted-foreground sm:flex-row sm:justify-center">
+                      <div className="text-muted-foreground flex flex-col items-center gap-1.5 text-xs font-medium sm:flex-row sm:justify-center">
                         <Info className="h-3 w-3" />
                         Media Info
                       </div>
                       <div className="flex flex-wrap justify-center gap-2">
                         {mediaSummary.map((item) => (
-                          <Badge key={item.label} variant="outline" className="gap-1.5 px-2.5 py-1 text-xs">
-                            <span className="text-muted-foreground">{item.label}:</span>
+                          <Badge
+                            key={item.label}
+                            variant="outline"
+                            className="gap-1.5 px-2.5 py-1 text-xs"
+                          >
+                            <span className="text-muted-foreground">
+                              {item.label}:
+                            </span>
                             <span className="font-medium">{item.value}</span>
                           </Badge>
                         ))}
@@ -581,18 +599,27 @@ export function FastLinkForm() {
 
                   {/* Full Details */}
                   {state.mediaResults && (
-                    <Accordion type="single" collapsible className="w-full pt-2">
-                      <AccordionItem value="details" className="border-t border-b-0 px-1">
-
-                        <AccordionTrigger className="group justify-center py-4 text-xs hover:no-underline text-muted-foreground hover:text-foreground transition-colors [&>svg:last-child]:hidden">
+                    <Accordion
+                      type="single"
+                      collapsible
+                      className="w-full pt-2"
+                    >
+                      <AccordionItem
+                        value="details"
+                        className="border-t border-b-0 px-1"
+                      >
+                        <AccordionTrigger className="group text-muted-foreground hover:text-foreground justify-center py-4 text-xs transition-colors hover:no-underline [&>svg:last-child]:hidden">
                           <span className="flex items-center gap-1.5">
-                            <ChevronDown className="group-data-[state=open]:rotate-180 h-3.5 w-3.5 shrink-0 transition-transform duration-200" />
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                             View Full Details
                           </span>
                         </AccordionTrigger>
                         <AccordionContent>
                           <div className="pt-2">
-                            <MediaView data={state.mediaResults} url={state.url} />
+                            <MediaView
+                              data={state.mediaResults}
+                              url={state.url}
+                            />
                           </div>
                         </AccordionContent>
                       </AccordionItem>
@@ -607,7 +634,7 @@ export function FastLinkForm() {
 
       {/* Footer */}
       <footer className="border-t py-6">
-        <div className="container mx-auto flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground sm:flex-row sm:gap-1.5">
+        <div className="text-muted-foreground/60 hover:text-muted-foreground container mx-auto flex flex-col items-center justify-center gap-1 text-xs transition-colors sm:flex-row sm:gap-1.5">
           <div className="flex items-center gap-1.5">
             <span>© {new Date().getFullYear()} FastLink</span>
             <span>•</span>
@@ -617,7 +644,7 @@ export function FastLinkForm() {
                 href="https://github.com/EithonX"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-medium text-foreground/80 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+                className="text-foreground/80 hover:text-foreground font-medium underline-offset-4 transition-colors hover:underline"
               >
                 Eithon
               </a>
@@ -633,7 +660,7 @@ export function FastLinkForm() {
                 href="https://github.com/luminalreason/mediapeek/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-medium text-foreground/80 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+                className="text-foreground/80 hover:text-foreground font-medium underline-offset-4 transition-colors hover:underline"
               >
                 MediaPeek
               </a>

@@ -1,23 +1,35 @@
-import * as React from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
+
+const getServerSnapshot = () => false;
 
 export function useMediaQuery(query: string) {
-  const [value, setValue] = React.useState(false);
-
-  React.useEffect(() => {
-    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-      function onChange(event: MediaQueryListEvent) {
-        setValue(event.matches);
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      if (
+        typeof window === 'undefined' ||
+        typeof window.matchMedia !== 'function'
+      ) {
+        return () => {};
       }
 
-      const result = window.matchMedia(query);
-      result.addEventListener('change', onChange);
-      setValue(result.matches);
+      const mediaQuery = window.matchMedia(query);
+      mediaQuery.addEventListener('change', onStoreChange);
 
-      return () => result.removeEventListener('change', onChange);
+      return () => mediaQuery.removeEventListener('change', onStoreChange);
+    },
+    [query],
+  );
+
+  const getSnapshot = useCallback(() => {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.matchMedia !== 'function'
+    ) {
+      return false;
     }
 
-    return undefined;
+    return window.matchMedia(query).matches;
   }, [query]);
 
-  return value;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

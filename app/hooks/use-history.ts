@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 export interface HistoryItem {
   id: string;
@@ -13,44 +13,64 @@ export interface HistoryItem {
 
 const STORAGE_KEY = 'fastlink_history';
 const MAX_ITEMS = 50;
+const EMPTY_HISTORY: HistoryItem[] = [];
+
+let cachedSerializedHistory: string | null | undefined;
+let cachedHistory = EMPTY_HISTORY;
+
+function getHistorySnapshot(): HistoryItem[] {
+  if (typeof window === 'undefined') return EMPTY_HISTORY;
+
+  const serializedHistory = localStorage.getItem(STORAGE_KEY);
+  if (serializedHistory === cachedSerializedHistory) return cachedHistory;
+
+  cachedSerializedHistory = serializedHistory;
+  if (!serializedHistory) {
+    cachedHistory = EMPTY_HISTORY;
+    return cachedHistory;
+  }
+
+  try {
+    cachedHistory = JSON.parse(serializedHistory) as HistoryItem[];
+  } catch (error) {
+    console.error('Failed to parse history', error);
+    cachedHistory = EMPTY_HISTORY;
+  }
+
+  return cachedHistory;
+}
+
+function subscribeToHistory(onStoreChange: () => void) {
+  const updateHistory = () => {
+    cachedSerializedHistory = undefined;
+    onStoreChange();
+  };
+  const handleStorageChange = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY) updateHistory();
+  };
+
+  window.addEventListener('storage', handleStorageChange);
+  window.addEventListener('fastlink_history_update', updateHistory);
+
+  return () => {
+    window.removeEventListener('storage', handleStorageChange);
+    window.removeEventListener('fastlink_history_update', updateHistory);
+  };
+}
+
+function writeHistory(history: HistoryItem[]) {
+  cachedHistory = history;
+  cachedSerializedHistory = JSON.stringify(history);
+  localStorage.setItem(STORAGE_KEY, cachedSerializedHistory);
+  window.dispatchEvent(new Event('fastlink_history_update'));
+}
 
 export function useHistory() {
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const loadHistory = () => {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        try {
-          setHistory(JSON.parse(stored));
-        } catch (e) {
-          console.error('Failed to parse history', e);
-        }
-      } else {
-        setHistory([]);
-      }
-    };
-
-    loadHistory();
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) {
-        loadHistory();
-      }
-    };
-
-    const handleCustomEvent = () => loadHistory();
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('fastlink_history_update', handleCustomEvent);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('fastlink_history_update', handleCustomEvent);
-    };
-  }, []);
+  const history = useSyncExternalStore(
+    subscribeToHistory,
+    getHistorySnapshot,
+    () => EMPTY_HISTORY,
+  );
 
   const addToHistory = (item: Omit<HistoryItem, 'id' | 'timestamp'>) => {
     const newItem: HistoryItem = {
@@ -59,33 +79,25 @@ export function useHistory() {
       timestamp: Date.now(),
     };
 
-    setHistory((prev) => {
-      // Avoid duplicates based on URL
-      const filtered = prev.filter((i) => i.url !== item.url);
-      const updated = [newItem, ...filtered].slice(0, MAX_ITEMS);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      window.dispatchEvent(new Event('fastlink_history_update'));
-      return updated;
-    });
+    const filtered = getHistorySnapshot().filter(
+      (entry) => entry.url !== item.url,
+    );
+    writeHistory([newItem, ...filtered].slice(0, MAX_ITEMS));
   };
 
   const removeFromHistory = (id: string) => {
-    setHistory((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      window.dispatchEvent(new Event('fastlink_history_update'));
-      return updated;
-    });
+    writeHistory(getHistorySnapshot().filter((item) => item.id !== id));
   };
 
   const clearHistory = () => {
-    setHistory([]);
+    cachedHistory = EMPTY_HISTORY;
+    cachedSerializedHistory = null;
     localStorage.removeItem(STORAGE_KEY);
     window.dispatchEvent(new Event('fastlink_history_update'));
   };
 
   return {
-    history: mounted ? history : [],
+    history,
     addToHistory,
     removeFromHistory,
     clearHistory,
