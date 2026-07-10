@@ -34,6 +34,7 @@ export function MediaView({ data, url }: MediaViewProps) {
   // Lazy load text view on demand
   useEffect(() => {
     if (isTextView && !data.text && !lazyText && !isFetchingText) {
+      let cancelled = false;
       const fetchText = async () => {
         setIsFetchingText(true);
         try {
@@ -44,23 +45,34 @@ export function MediaView({ data, url }: MediaViewProps) {
             const data = (await response.json()) as {
               results?: { text?: string };
             };
-            if (data.results?.text) {
+            if (data.results?.text && !cancelled) {
               setLazyText(data.results.text);
-            } else {
+            } else if (!cancelled) {
               setLazyText('No text data available.');
             }
-          } else {
+          } else if (!cancelled) {
             setLazyText('Failed to load text view.');
           }
         } catch (error) {
           console.error('Failed to fetch text view:', error);
-          setLazyText('Error loading text view.');
+          if (!cancelled) {
+            setLazyText('Error loading text view.');
+          }
         } finally {
-          setIsFetchingText(false);
+          if (!cancelled) {
+            setIsFetchingText(false);
+          }
         }
       };
-      fetchText();
+
+      void fetchText();
+
+      return () => {
+        cancelled = true;
+      };
     }
+
+    return undefined;
   }, [isTextView, data.text, lazyText, isFetchingText, url]);
 
   // Handle Escape key to exit full screen

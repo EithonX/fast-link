@@ -43,8 +43,14 @@ export const TurnstileWidget = forwardRef<
 >(({ onVerify, onError, onExpire }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [widgetId, setWidgetId] = useState<string | null>(null);
+  const widgetIdRef = useRef<string | null>(null);
+  const callbacksRef = useRef({ onVerify, onError, onExpire });
 
-  const [isVerified, setIsVerified] = useState(false);
+  useEffect(() => {
+    callbacksRef.current = { onVerify, onError, onExpire };
+  }, [onError, onExpire, onVerify]);
+
+  const [isVerified, setIsVerified] = useState(import.meta.env.DEV);
 
   useImperativeHandle(ref, () => ({
     reset: () => {
@@ -58,50 +64,53 @@ export const TurnstileWidget = forwardRef<
   useEffect(() => {
     // Localhost / Development Bypass
     if (import.meta.env.DEV) {
-      onVerify('localhost-mock-token');
-      setIsVerified(true);
-      return;
+      callbacksRef.current.onVerify('localhost-mock-token');
+      return undefined;
     }
 
-    if (!containerRef.current) return;
-
-    // Wait for turnstile to be available
-    const checkTurnstile = setInterval(() => {
-      if (window.turnstile && containerRef.current) {
-        clearInterval(checkTurnstile);
-        if (!widgetId) {
-          try {
-            const siteKey = getTurnstileSiteKey();
-            const id = window.turnstile.render(containerRef.current, {
-              sitekey: siteKey,
-              callback: (token) => {
-                onVerify(token);
-                setIsVerified(true);
-              },
-              'error-callback': () => {
-                onError?.();
-              },
-              'expired-callback': () => {
-                onExpire?.();
-                setIsVerified(false);
-              },
-              theme: 'auto',
-            });
-            setWidgetId(id);
-          } catch (e) {
-            console.error('Turnstile render error:', e);
+    if (containerRef.current) {
+      // Wait for turnstile to be available
+      const checkTurnstile = setInterval(() => {
+        if (window.turnstile && containerRef.current) {
+          clearInterval(checkTurnstile);
+          if (!widgetIdRef.current) {
+            try {
+              const siteKey = getTurnstileSiteKey();
+              const id = window.turnstile.render(containerRef.current, {
+                sitekey: siteKey,
+                callback: (token) => {
+                  callbacksRef.current.onVerify(token);
+                  setIsVerified(true);
+                },
+                'error-callback': () => {
+                  callbacksRef.current.onError?.();
+                },
+                'expired-callback': () => {
+                  callbacksRef.current.onExpire?.();
+                  setIsVerified(false);
+                },
+                theme: 'auto',
+              });
+              widgetIdRef.current = id;
+              setWidgetId(id);
+            } catch (e) {
+              console.error('Turnstile render error:', e);
+            }
           }
         }
-      }
-    }, 100);
+      }, 100);
 
-    return () => {
-      clearInterval(checkTurnstile);
-      if (widgetId && window.turnstile) {
-        window.turnstile.remove(widgetId);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      return () => {
+        clearInterval(checkTurnstile);
+        if (widgetIdRef.current && window.turnstile) {
+          window.turnstile.remove(widgetIdRef.current);
+          widgetIdRef.current = null;
+          setWidgetId(null);
+        }
+      };
+    }
+
+    return undefined;
   }, []);
 
   if (import.meta.env.DEV) {
