@@ -1,82 +1,87 @@
-# FastLink
-
 <div align="center">
-
-  <!-- You can add a logo here if you have one -->
-  <!-- <img src="public/icon.svg" alt="FastLink Logo" width="120" /> -->
-
-  <h3>High-Speed Download Accelerator & Media Analyzer</h3>
-
-  <p>
-    Accelerate downloads, analyze media metadata, and manage your history.<br />
-    Powered by <b>Cloudflare Workers</b> and <b>MediaInfo.js</b>.
+  <br />
+  <h1 align="center">
+    FASTLINK
+  </h1>
+  <p align="center">
+    <strong>High-Speed Download Accelerator & Media Analyzer</strong>
   </p>
-
-  <p>
-    <a href="#-features">Features</a> •
-    <a href="#-tech-stack">Tech Stack</a> •
-    <a href="#-license">License</a>
+  <br />
+  <p align="center">
+    <a href="https://github.com/EithonX/fast-link/blob/main/LICENSE">
+      <img src="https://img.shields.io/badge/License-GPLv3-222222.svg?style=for-the-badge&labelColor=111111" alt="License">
+    </a>
+    <a href="https://workers.cloudflare.com/">
+      <img src="https://img.shields.io/badge/Cloudflare-F38020.svg?style=for-the-badge&logo=cloudflare&logoColor=white&labelColor=111111" alt="Cloudflare Workers">
+    </a>
+    <a href="https://reactrouter.com/">
+      <img src="https://img.shields.io/badge/React_Router-CA4245.svg?style=for-the-badge&logo=react-router&logoColor=white&labelColor=111111" alt="React Router">
+    </a>
+    <a href="https://www.typescriptlang.org/">
+      <img src="https://img.shields.io/badge/TypeScript-007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white&labelColor=111111" alt="TypeScript">
+    </a>
   </p>
-
-  ![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)
-  ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare_Workers-Orange?style=flat-square&logo=cloudflare)
-  ![React](https://img.shields.io/badge/React_Router_v7-Red?style=flat-square&logo=react-router)
-  ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)
-
+  <br />
 </div>
 
-<br />
-
-> **FastLink** solves the problem of slow direct downloads by proxying traffic through Cloudflare's global edge network. It creates resume-capable links and provides detailed technical metadata for video and audio files instantly—without downloading the entire file.
+<div align="center">
+  <i>Proxy direct links through Cloudflare's edge network for ultimate stability and speed.</i>
+</div>
 
 ---
 
-## ⚡ Features
+## Overview
 
-| Feature | Description |
+FastLink is a tool I built to fix slow and unstable direct downloads. It uses Cloudflare's massive global network as a proxy, so your downloads go through their edge nodes instead of directly from the slow source.
+
+It also grabs detailed metadata from video and audio files instantly, right in the browser, without needing to download the whole file first.
+
+## What it does
+
+| Feature | How it works |
 | :--- | :--- |
-| **🚀 Acceleration** | Proxies downloads through Cloudflare to bypass throttling and improve stability. |
-| **⏯️ Resume Support** | Generates links that support pausing and resuming downloads (Byte-Range headers). |
-| **📊 Media Analysis** | Extracts deep metadata (Resolution, Bitrate, Codecs) using MediaInfo WebAssembly. |
-| **🕒 Smart History** | Auto-saves your sessions. Restore previous links and metadata with a single click. |
-| **🛡️ Secure Proxy** | Built-in SSRF protection and browser emulation for maximum compatibility. |
-| **🎨 Modern UI** | A beautiful, responsive interface crafted with **shadcn/ui** and **Tailwind CSS**. |
+| **Global Acceleration** | Routes traffic through Cloudflare Edge to bypass throttling and strict network limits. |
+| **Resume Support** | Keeps `Byte-Range` headers intact. Pausing and resuming your downloads actually works. |
+| **Deep Media Analysis** | Runs `mediainfo.js` via WebAssembly to grab things like Bitrate, Codec, and Resolution on the fly. |
+| **Edge Security** | Comes with SSRF mitigation, TLS fingerprinting, and dynamic browser emulation so links don't get blocked. |
 
-## 🛠️ Tech Stack
+<details>
+<summary><strong>View System Architecture</strong></summary>
+<br>
 
-This project is built with a modern, edge-first architecture:
+Everything runs on the edge to keep latency as low as possible globally:
 
--   **Runtime**: [Cloudflare Workers](https://workers.cloudflare.com/) (Serverless Edge)
--   **Framework**: [React Router v7](https://reactrouter.com/) (formerly Remix)
--   **Language**: TypeScript
--   **UI Library**: [shadcn/ui](https://ui.shadcn.com/)
--   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
--   **Core Engine**: [MediaInfo.js](https://github.com/buzz/mediainfo.js) (WASM)
+- **Compute**: Cloudflare Workers
+- **Framework**: React Router v7
+- **UI Component System**: shadcn/ui + Tailwind CSS
+- **Media Engine**: WebAssembly (WASM) 
 
-## 🚀 Getting Started
+</details>
 
-### Prerequisites
+## Quick Start
 
--   Use a **Standard HTTP/HTTPS** direct link to a media file.
--   Or use a public **Google Drive** file link.
+```bash
+# 1. Get a direct link
+https://example.com/movie.mp4
 
-### Usage
+# 2. Drop it into FastLink
+-> The UI validates it instantly on the client side
 
-1.  Paste your link into the input field.
-2.  FastLink instantly validates the URL.
-3.  Click **Generate** to analyze the file and create a proxy link.
-4.  View detailed media info or click the **Download** button to start.
-5.  Access your **History** via the top-right menu to restore past sessions.
+# 3. Get your results
+-> A proxied, high-speed download link
+-> Extracted Codec & Container data
+```
 
-## 📄 License
+## Credits
 
-**FastLink** is released under the **GNU GPLv3** license.
+Built on top of some awesome open-source projects.
 
-## 👏 Acknowledgments
+- **MediaInfo**: Analysis powered by [mediainfo.js](https://github.com/buzz/mediainfo.js) (MediaArea.net).
+- **Inspiration**: Heavily inspired by [MediaPeek](https://github.com/luminalreason/mediapeek/). Big thanks to [luminalreason](https://github.com/luminalreason) for the original concept.
+- **Maintained by**: [Eithon](https://github.com/EithonX).
 
-Special thanks to the open-source community:
+<br />
 
--   **MediaInfo**: Analysis powered by [mediainfo.js](https://github.com/buzz/mediainfo.js) (MediaArea.net).
--   **Inspiration**: This project was heavily inspired by [MediaPeek](https://github.com/luminalreason/mediapeek/).
-    -   *Big thanks to [luminalreason](https://github.com/luminalreason) for the original concept.*
--   **Developer**: Built by [Eithon](https://github.com/EithonX).
+<div align="center">
+  Released under the <strong>GNU GPLv3 License</strong>
+</div>
