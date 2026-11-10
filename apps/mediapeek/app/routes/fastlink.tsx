@@ -209,10 +209,10 @@ function FastLinkPage() {
                   className="inline-flex h-10 items-center rounded-full border px-5 text-sm font-medium hover:bg-muted">
                   Preview file
                 </a>
-                <Link to="/app" search={{ url: result.source }}
+                <a href={"/app?url=" + encodeURIComponent(result.source)}
                   className="inline-flex h-10 items-center rounded-full border px-5 text-sm font-medium hover:bg-muted">
                   Analyze metadata
-                </Link>
+                </a>
               </div>
             </div>
           )}
