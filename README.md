@@ -25,25 +25,25 @@
 </div>
 
 <div align="center">
-  <i>Proxy direct links through Cloudflare's edge network for ultimate stability and speed.</i>
+  <i>Generate direct links and proxy public media through Cloudflare's edge.</i>
 </div>
 
 ---
 
 ## Overview
 
-FastLink is a tool I built to fix slow and unstable direct downloads. It uses Cloudflare's massive global network as a proxy, so your downloads go through their edge nodes instead of directly from the slow source.
+FastLink is a tool I built to make direct downloads easier to use. It can proxy publicly accessible files through a Cloudflare Worker. Actual transfer speed still depends on the source, network, and Cloudflare limits.
 
-It also grabs detailed metadata from video and audio files instantly, right in the browser, without needing to download the whole file first.
+It can inspect video and audio metadata using partial HTTP reads, often without downloading the complete file.
 
 ## What it does
 
 | Feature | How it works |
 | :--- | :--- |
-| **Global Acceleration** | Routes traffic through Cloudflare Edge to bypass throttling and strict network limits. |
-| **Resume Support** | Keeps `Byte-Range` headers intact. Pausing and resuming your downloads actually works. |
+| **Edge Proxy** | Proxies public HTTP(S) file downloads through Cloudflare when the origin permits access. |
+| **Resume Support** | Forwards HTTP `Range` requests and preserves origin response status; resuming depends on origin range support. |
 | **Deep Media Analysis** | Runs `mediainfo.js` via WebAssembly to grab things like Bitrate, Codec, and Resolution on the fly. |
-| **Edge Security** | Comes with SSRF mitigation, TLS fingerprinting, and dynamic browser emulation so links don't get blocked. |
+| **URL Safety** | Validates file URLs and redirect targets, blocks local/private addresses, and sends browser-like media request headers. |
 
 <details>
 <summary><strong>View System Architecture</strong></summary>
@@ -52,7 +52,7 @@ It also grabs detailed metadata from video and audio files instantly, right in t
 Everything runs on the edge to keep latency as low as possible globally:
 
 - **Compute**: Cloudflare Workers
-- **Framework**: React Router v7
+- **Framework**: React Router v8
 - **UI Component System**: shadcn/ui + Tailwind CSS
 - **Media Engine**: WebAssembly (WASM) 
 
@@ -77,7 +77,7 @@ https://example.com/movie.mp4
 Built on top of some awesome open-source projects.
 
 - **MediaInfo**: Analysis powered by [mediainfo.js](https://github.com/buzz/mediainfo.js) (MediaArea.net).
-- **Inspiration**: Heavily inspired by [MediaPeek](https://github.com/luminalreason/mediapeek/). Big thanks to [luminalreason](https://github.com/luminalreason) for the original concept.
+- **Media analysis engine**: Selected updates adapted from [MediaPeek](https://github.com/DG02002/mediapeek), while FastLink maintains its own generator and UI.
 - **Maintained by**: [Eithon](https://github.com/EithonX).
 
 <br />
