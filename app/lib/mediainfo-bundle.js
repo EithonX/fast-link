@@ -1,60 +1,79 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 /* eslint-disable */
+// @ts-nocheck
+// MediaPeek vendored copy of mediainfo.js v0.3.8 esm-bundle.
+// Cloudflare patches pass the imported WebAssembly.Module through the factory
+// and instantiate it directly, avoiding runtime WebAssembly compilation.
 function isError(error) {
-  return (
-    error !== null &&
-    typeof error === 'object' &&
-    Object.prototype.hasOwnProperty.call(error, 'message')
-  );
+  return error !== null && typeof error === 'object' && Object.prototype.hasOwnProperty.call(error, 'message');
 }
 function unknownToError(error) {
-  if (isError(error)) {
-    return error;
-  }
-  return new Error(typeof error === 'string' ? error : 'Unknown error');
+  return isError(error) ? error : new Error(typeof error === 'string' ? error : 'Unknown error');
 }
 
 // DO NOT EDIT! File generated using `generate-types` script.
-//
-// -----------------------------------------------------------------------------
-// PATCHED FOR CLOUDFLARE WORKERS (FASTLINK)
-// -----------------------------------------------------------------------------
-// This file is a vendored copy of `mediainfo.js` (v0.3.7) esm-bundle.
-// It has been patched to support pre-compiled WebAssembly Modules, which is
-// required for Cloudflare Workers where 'Wasm code generation' is disallowed.
-//
-// PATCH DESCRIPTION:
-// 1. mediaInfoFactory (Bottom of file): Modified to pass `options.wasmModule`
-//    to the inner `Module` constructor. Upstream filters this out.
-// 2. instantiateAsync (Middle of file): Modified to check for `Module['wasmModule']`
-//    and use `WebAssembly.instantiate(module, imports)` directly.
-//
-// HOW TO UPDATE:
-// If you update `mediainfo.js`, you must copy `dist/esm-bundle/index.js` here
-// and Re-Apply the changes described above.
-// -----------------------------------------------------------------------------
 
 const INT_FIELDS = ['Active_Height', 'Active_Width', 'AudioCount', 'Audio_Channels_Total', 'BitDepth_Detected', 'BitDepth', 'BitDepth_Stored', 'Channels', 'Channels_Original', 'Chapters_Pos_Begin', 'Chapters_Pos_End', 'Comic_Position_Total', 'Count', 'DataSize', 'ElementCount', 'EPG_Positions_Begin', 'EPG_Positions_End', 'FirstPacketOrder', 'FooterSize', 'Format_Settings_GMC', 'Format_Settings_RefFrames', 'Format_Settings_SliceCount', 'FrameCount', 'FrameRate_Den', 'FrameRate_Num', 'GeneralCount', 'HeaderSize', 'Height_CleanAperture', 'Height', 'Height_Offset', 'Height_Original', 'ImageCount', 'Lines_MaxCharacterCount', 'Lines_MaxCountPerEvent', 'Matrix_Channels', 'MenuCount', 'OtherCount', 'Part_Position', 'Part_Position_Total', 'Played_Count', 'Reel_Position', 'Reel_Position_Total', 'Resolution', 'Sampled_Height', 'Sampled_Width', 'SamplingCount', 'Season_Position', 'Season_Position_Total', 'Source_FrameCount', 'Source_SamplingCount', 'Source_StreamSize_Encoded', 'Source_StreamSize', 'Status', 'Stored_Height', 'Stored_Width', 'StreamCount', 'StreamKindID', 'StreamKindPos', 'StreamSize_Demuxed', 'StreamSize_Encoded', 'StreamSize', 'TextCount', 'Track_Position', 'Track_Position_Total', 'Video0_Delay', 'VideoCount', 'Width_CleanAperture', 'Width', 'Width_Offset', 'Width_Original'];
 const FLOAT_FIELDS = ['Active_DisplayAspectRatio', 'BitRate_Encoded', 'BitRate_Maximum', 'BitRate_Minimum', 'BitRate', 'BitRate_Nominal', 'Bits-Pixel_Frame', 'BitsPixel_Frame', 'Compression_Ratio', 'Delay', 'Delay_Original', 'DisplayAspectRatio_CleanAperture', 'DisplayAspectRatio', 'DisplayAspectRatio_Original', 'Duration_End_Command', 'Duration_End', 'Duration_FirstFrame', 'Duration_LastFrame', 'Duration', 'Duration_Start2End', 'Duration_Start_Command', 'Duration_Start', 'Events_MinDuration', 'FrameRate_Maximum', 'FrameRate_Minimum', 'FrameRate', 'FrameRate_Nominal', 'FrameRate_Original_Den', 'FrameRate_Original', 'FrameRate_Original_Num', 'FrameRate_Real', 'Interleave_Duration', 'Interleave_Preload', 'Interleave_VideoFrames', 'MasteringDisplay_Luminance_Max', 'MasteringDisplay_Luminance_Min', 'MaxCLL', 'MaxCLL_Original', 'MaxFALL', 'MaxFALL_Original', 'OverallBitRate_Maximum', 'OverallBitRate_Minimum', 'OverallBitRate', 'OverallBitRate_Nominal', 'PixelAspectRatio_CleanAperture', 'PixelAspectRatio', 'PixelAspectRatio_Original', 'SamplesPerFrame', 'SamplingRate', 'Source_Duration_FirstFrame', 'Source_Duration_LastFrame', 'Source_Duration', 'TimeStamp_FirstFrame', 'Video_Delay'];
 
+/**
+ * MediaInfoLib's `(int64u)-1` file size: `Open_Buffer_Init()` then only moves the read position
+ * instead of re-initializing the parser. The native file reader uses it for every seek.
+ */
+const POSITION_ONLY = -1;
 const DEFAULT_OPTIONS = {
   coverData: false,
   chunkSize: 256 * 1024,
   format: 'object',
-  full: true,
+  full: false
 };
-
+/**
+ * Wrapper for the MediaInfoLib WASM module.
+ *
+ * This class should not be instantiated directly. Use the {@link mediaInfoFactory} function
+ * to create instances of `MediaInfo`.
+ *
+ * @typeParam TFormat - The format type, defaults to `object`.
+ */
 class MediaInfo {
+  mediainfoModule;
+  ptr;
   isAnalyzing = false;
 
+  /** @group General Use */
+  options;
+
+  /**
+   * The constructor should not be called directly, instead use {@link mediaInfoFactory}.
+   *
+   * @hidden
+   * @param mediainfoModule WASM module
+   * @param options User options
+   */
   constructor(mediainfoModule, options) {
     this.mediainfoModule = mediainfoModule;
     this.options = options;
     this.ptr = this.instantiateModuleInstance();
   }
 
+  /**
+   * Convenience method for analyzing a buffer chunk by chunk.
+   *
+   * @param size Return total buffer size in bytes.
+   * @param readChunk Read chunk of data and return an {@link Uint8Array}.
+   * @group General Use
+   */
+
+  /**
+   * Convenience method for analyzing a buffer chunk by chunk.
+   *
+   * @param size Return total buffer size in bytes.
+   * @param readChunk Read chunk of data and return an {@link Uint8Array}.
+   * @param callback Function that is called once the processing is done
+   * @group General Use
+   */
+
   analyzeData(size, readChunk, callback) {
+    // Support promise signature
     if (callback === undefined) {
       return new Promise((resolve, reject) => {
         const resultCb = (result, error) => {
@@ -87,66 +106,92 @@ class MediaInfo {
         this.isAnalyzing = false;
       }
     };
+    const fail = error => {
+      this.isAnalyzing = false;
+      callback(null, unknownToError(error));
+    };
     let offset = 0;
-    const runReadDataLoop = fileSize => {
-      const readNextChunk = data => {
-        if (continueBuffer(data)) {
-          getChunk();
-        } else {
-          finalize();
-        }
-      };
-      const getChunk = () => {
-        let dataValue;
-        try {
-          const safeSize = Math.min(this.options.chunkSize, fileSize - offset);
-          dataValue = readChunk(safeSize, offset);
-        } catch (error) {
-          this.isAnalyzing = false;
-          callback(null, unknownToError(error));
-          return;
-        }
-        if (dataValue instanceof Promise) {
-          dataValue.then(readNextChunk).catch(error => {
-            this.isAnalyzing = false;
-            callback(null, unknownToError(error));
-          });
-        } else {
-          readNextChunk(dataValue);
-        }
-      };
-      const continueBuffer = data => {
-        if (data.length === 0 || this.openBufferContinue(data, data.length)) {
+    let lastSeekTo = -1;
+    const runReadDataLoop = async fileSize => {
+      /**
+       * Hand one chunk to MediaInfoLib and update the read position.
+       *
+       * @returns `true` when more data has to be read
+       */
+      const shouldReadMore = data => {
+        if (data.length === 0) {
           return false;
         }
+        const isFinished = this.openBufferContinue(data, data.length);
         const seekTo = this.openBufferContinueGotoGet();
-        if (seekTo === -1) {
-          offset += data.length;
-        } else {
+
+        // A pending seek wins over the "finished" flag: MediaInfoLib can raise both in the same
+        // call, e.g. when the MP4 parser jumps back to a codec config box after having been given
+        // the whole file at once (issue #188). Skipping the seek loses the fields it would fill.
+        if (seekTo !== -1) {
+          // Past the end of the file, or asked for a second time without any progress in between:
+          // the parser can not be satisfied, so let the finalizer wrap it up. Only catches a parser
+          // stuck on one target, not an alternating X->Y->X cycle.
+          if (seekTo === lastSeekTo || seekTo >= fileSize) {
+            return false;
+          }
           offset = seekTo;
-          this.openBufferInit(fileSize, seekTo);
+          lastSeekTo = seekTo;
+          // While the parser still expects data, a seek is just a reposition: passing the known
+          // file size runs a full re-init, which clears the durations collected so far and aborts
+          // the walk FLV does backwards from end of file to find them (issue #164). Only a parser
+          // that already reported "finished" needs the full re-init, to get that flag cleared
+          // (issue #188).
+          // Known limit: when one readChunk() call delivers the whole file, MediaInfoLib raises the
+          // walk seek together with "finished", so the re-init is unavoidable and resets the walk -
+          // handing the parser smaller pieces internally is what would be needed to cover it.
+          this.openBufferInit(isFinished ? fileSize : POSITION_ONLY, seekTo);
+          return true;
         }
-        return true;
+        lastSeekTo = -1;
+        offset += data.length;
+        return offset < fileSize && !isFinished;
       };
-      this.openBufferInit(fileSize, offset);
-      getChunk();
+      try {
+        this.openBufferInit(fileSize, offset);
+        for (;;) {
+          // await (also for synchronous readers) keeps this iterative, a mutual recursion with
+          // shouldReadMore() would add a stack frame per chunk
+          const data = await readChunk(Math.min(this.options.chunkSize, fileSize - offset), offset);
+          if (!shouldReadMore(data)) {
+            break;
+          }
+        }
+        finalize();
+      } catch (error) {
+        fail(error);
+      }
     };
     const fileSizeValue = typeof size === 'function' ? size() : size;
     if (fileSizeValue instanceof Promise) {
-      fileSizeValue.then(runReadDataLoop).catch(error => {
-        callback(null, unknownToError(error));
-      });
+      fileSizeValue.then(runReadDataLoop).catch(fail);
     } else {
-      runReadDataLoop(fileSizeValue);
+      void runReadDataLoop(fileSizeValue);
     }
   }
 
+  /**
+   * Close the MediaInfoLib WASM instance.
+   *
+   * @group General Use
+   */
   close() {
     if (this.ptr) {
       this.mediainfoModule._mi_close(this.ptr);
     }
   }
 
+  /**
+   * Reset the MediaInfoLib WASM instance to its initial state.
+   *
+   * This method ensures that the instance is ready for a new parse.
+   * @group General Use
+   */
   reset() {
     if (this.ptr) {
       this.mediainfoModule._mi_delete(this.ptr);
@@ -154,36 +199,93 @@ class MediaInfo {
     this.ptr = this.instantiateModuleInstance();
   }
 
+  /**
+   * Receive result data from the WASM instance.
+   *
+   * (This is a low-level MediaInfoLib function.)
+   *
+   * @returns Result data (format can be configured in options)
+   * @group Low-level
+   */
   inform() {
     const resPtr = this.mediainfoModule._mi_inform(this.ptr);
     return this.mediainfoModule.UTF8ToString(resPtr);
   }
 
+  /**
+   * Send more data to the WASM instance.
+   *
+   * (This is a low-level MediaInfoLib function.)
+   *
+   * @param data Data buffer
+   * @param size Buffer size
+   * @returns Processing state: `0` (no bits set) = not finished, Bit `0` set = enough data read for providing information
+   * @group Low-level
+   */
   openBufferContinue(data, size) {
+    // Copy data to Wasm heap
     const dataPtr = this.mediainfoModule._malloc(size);
     this.mediainfoModule.HEAPU8.set(data, dataPtr);
     const result = this.mediainfoModule._mi_open_buffer_continue(this.ptr, dataPtr, size);
     this.mediainfoModule._free(dataPtr);
+    // Bit 3 set (0x08) means processing is complete
     return !!(result & 0x08);
   }
 
+  /**
+   * Retrieve seek position from WASM instance.
+   * The MediaInfoLib function `Open_Buffer_GoTo` returns an integer with 64 bit precision.
+   * It would be cut at 32 bit due to the JavaScript bindings. Here we transport the low and high
+   * parts separately and put them together.
+   *
+   * (This is a low-level MediaInfoLib function.)
+   *
+   * @returns Seek position (where MediaInfoLib wants go in the data buffer)
+   * @group Low-level
+   */
   openBufferContinueGotoGet() {
+    // BigInt return value converted to standard JS number
     const seekTo = this.mediainfoModule._mi_open_buffer_continue_goto_get(this.ptr);
     return Number(seekTo);
   }
 
+  /**
+   * Inform MediaInfoLib that no more data is being read.
+   *
+   * (This is a low-level MediaInfoLib function.)
+   *
+   * @group Low-level
+   */
   openBufferFinalize() {
     this.mediainfoModule._mi_open_buffer_finalize(this.ptr);
   }
 
+  /**
+   * Prepare MediaInfoLib to process a data buffer.
+   *
+   * (This is a low-level MediaInfoLib function.)
+   *
+   * @param size Expected buffer size, or -1 to keep the parser state and only move the read
+   * position
+   * @param offset Buffer offset
+   * @group Low-level
+   */
   openBufferInit(size, offset) {
+    // Use BigInt for 64-bit compatibility
     this.mediainfoModule._mi_open_buffer_init(this.ptr, BigInt(size), BigInt(offset));
   }
 
+  /**
+   * Parse result JSON. Convert integer/float fields.
+   *
+   * @param result Serialized JSON from MediaInfo
+   * @returns Parsed JSON object
+   */
   parseResultJson(resultString) {
     const intFields = INT_FIELDS;
     const floatFields = FLOAT_FIELDS;
 
+    // Parse JSON
     const result = JSON.parse(resultString);
     if (result.media) {
       const newMedia = {
@@ -196,9 +298,6 @@ class MediaInfo {
             '@type': track['@type']
           };
           for (const [key, val] of Object.entries(track)) {
-            if (key === '@type') {
-              continue;
-            }
             if (typeof val === 'string' && intFields.includes(key)) {
               newTrack = {
                 ...newTrack,
@@ -227,6 +326,11 @@ class MediaInfo {
     return result;
   }
 
+  /**
+   * Instantiate a new WASM module instance.
+   *
+   * @returns MediaInfo module instance
+   */
   instantiateModuleInstance() {
     const format = this.options.format === 'object' ? 'JSON' : this.options.format;
     const bytesNeeded = this.mediainfoModule.lengthBytesUTF8(format) + 1;
@@ -241,7 +345,6 @@ class MediaInfo {
 }
 
 async function Module(moduleArg = {}) {
-  var moduleRtn;
   var Module = moduleArg;
   var thisProgram = './this.program';
   var quit_ = (status, toThrow) => {
@@ -275,29 +378,27 @@ async function Module(moduleArg = {}) {
   var wasmBinary;
   var ABORT = false;
   var EXITSTATUS;
-  var readyPromiseResolve, readyPromiseReject;
-  var HEAPU8, HEAP32, HEAPU32;
-  var runtimeInitialized = false;
+  function getMemoryBuffer() {
+    return wasmMemory.buffer
+  }
   function updateMemoryViews() {
-    var b = wasmMemory.buffer;
+    if (HEAP8?.buffer?.resizable) return
+    var b = getMemoryBuffer();
+    HEAP8 = new Int8Array(b);
     Module['HEAPU8'] = HEAPU8 = new Uint8Array(b);
     HEAP32 = new Int32Array(b);
     HEAPU32 = new Uint32Array(b);
-    new BigInt64Array(b);
-    new BigUint64Array(b);
   }
   function initRuntime() {
-    runtimeInitialized = true;
     wasmExports['n']();
   }
   function abort(what) {
     Module['onAbort']?.(what);
-    what = 'Aborted(' + what + ')';
+    what = `Aborted(${what})`;
     err(what);
     ABORT = true;
     what += '. Build with -sASSERTIONS for more info.';
     var e = new WebAssembly.RuntimeError(what);
-    readyPromiseReject?.(e);
     throw e
   }
   var wasmBinaryFile;
@@ -330,14 +431,14 @@ async function Module(moduleArg = {}) {
     }
   }
   async function instantiateAsync(binary, binaryFile, imports) {
-    // Use pre-compiled module if provided
+    // Use the pre-compiled module imported by Vite for Cloudflare Workers.
     if (Module['wasmModule']) {
       try {
         var instance = await WebAssembly.instantiate(Module['wasmModule'], imports);
         return { instance: instance, module: Module['wasmModule'] };
-      } catch (e) {
-        err(`wasm instantiation failed: ${e}`);
-        abort(e);
+      } catch (reason) {
+        err(`wasm instantiation failed: ${reason}`);
+        abort(reason);
       }
     }
     {
@@ -353,11 +454,11 @@ async function Module(moduleArg = {}) {
     return instantiateArrayBuffer(binaryFile, imports)
   }
   function getWasmImports() {
-    var imports = { env: wasmImports, a: wasmImports };
+    var imports = { a: wasmImports };
     return imports
   }
   async function createWasm() {
-    function receiveInstance(instance, module) {
+    function receiveInstance(instance) {
       wasmExports = instance.exports;
       assignWasmExports(wasmExports);
       updateMemoryViews();
@@ -369,8 +470,8 @@ async function Module(moduleArg = {}) {
     var info = getWasmImports();
     wasmBinaryFile ??= findWasmBinary();
     var result = await instantiateAsync(wasmBinary, wasmBinaryFile, info);
-    var exports$1 = receiveInstantiationResult(result);
-    return exports$1
+    var exports = receiveInstantiationResult(result);
+    return exports
   }
   class ExitStatus {
     name = 'ExitStatus'
@@ -379,15 +480,20 @@ async function Module(moduleArg = {}) {
       this.status = status;
     }
   }
+  var HEAP8;
   var __abort_js = () => abort('');
   var __emscripten_runtime_keepalive_clear = () => {
   };
   var INT53_MAX = 9007199254740992;
   var INT53_MIN = -9007199254740992;
   var bigintToI53Checked = (num) => (num < INT53_MIN || num > INT53_MAX ? NaN : Number(num));
+  var HEAP32;
   function __gmtime_js(time, tmPtr) {
     time = bigintToI53Checked(time);
     var date = new Date(time * 1e3);
+    if (isNaN(date.getTime())) {
+      return 1
+    }
     HEAP32[tmPtr >> 2] = date.getUTCSeconds();
     HEAP32[(tmPtr + 4) >> 2] = date.getUTCMinutes();
     HEAP32[(tmPtr + 8) >> 2] = date.getUTCHours();
@@ -398,6 +504,7 @@ async function Module(moduleArg = {}) {
     var start = Date.UTC(date.getUTCFullYear(), 0, 1, 0, 0, 0, 0);
     var yday = ((date.getTime() - start) / (1e3 * 60 * 60 * 24)) | 0;
     HEAP32[(tmPtr + 28) >> 2] = yday;
+    return 0
   }
   var timers = {};
   var handleException = (e) => {
@@ -410,17 +517,15 @@ async function Module(moduleArg = {}) {
     EXITSTATUS = code;
     quit_(code, new ExitStatus(code));
   };
-  var maybeExit = () => {
-  };
   var callUserCallback = (func) => {
     if (ABORT) {
       return
     }
     try {
-      func();
-      maybeExit();
+      return func()
     } catch (e) {
       handleException(e);
+    } finally {
     }
   };
   var _emscripten_get_now = () => performance.now();
@@ -467,8 +572,10 @@ async function Module(moduleArg = {}) {
     heap[outIdx] = 0;
     return outIdx - startIdx
   };
+  var HEAPU8;
   var stringToUTF8 = (str, outPtr, maxBytesToWrite) =>
     stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
+  var HEAPU32;
   var __tzset_js = (timezone, daylight, std_name, dst_name) => {
     var currentYear = new Date().getFullYear();
     var winter = new Date(currentYear, 0, 1);
@@ -611,7 +718,7 @@ async function Module(moduleArg = {}) {
   };
   var printChar = (stream, curr) => {
     var buffer = printCharBuffers[stream];
-    if (curr === 0 || curr === 10) {
+    if (!curr || curr === 10) {
 (stream === 1 ? out : err)(UTF8ArrayToString(buffer));
       buffer.length = 0;
     } else {
@@ -664,41 +771,26 @@ async function Module(moduleArg = {}) {
   }
   var wasmImports = {
     l: __abort_js,
-    i: __emscripten_runtime_keepalive_clear,
+    c: __emscripten_runtime_keepalive_clear,
     d: __gmtime_js,
-    j: __setitimer_js,
+    h: __setitimer_js,
     e: __tzset_js,
     k: _emscripten_date_now,
-    a: _emscripten_resize_heap,
-    b: _environ_get,
-    c: _environ_sizes_get,
+    i: _emscripten_resize_heap,
+    j: _environ_get,
+    a: _environ_sizes_get,
     f: _fd_close,
     g: _fd_write,
-    h: _proc_exit,
+    b: _proc_exit,
   };
-  function run() {
-    function doRun() {
-      Module['calledRun'] = true;
-      if (ABORT) return
-      initRuntime();
-      readyPromiseResolve?.(Module);
-    }
-    {
-      doRun();
-    }
+  async function run() {
+    if (ABORT) return
+    initRuntime();
   }
   var wasmExports;
   wasmExports = await createWasm();
-  run();
-  if (runtimeInitialized) {
-    moduleRtn = Module;
-  } else {
-    moduleRtn = new Promise((resolve, reject) => {
-      readyPromiseResolve = resolve;
-      readyPromiseReject = reject;
-    });
-  }
-  return moduleRtn
+  await run();
+  return Module
 }
 
 const noopPrint = () => {
@@ -716,10 +808,24 @@ function defaultLocateFile(path, prefix) {
   return `${prefix}../${path}`;
 }
 
-function mediaInfoFactory() {
-  let options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
-  let callback = arguments.length > 1 ? arguments[1] : undefined;
-  let errCallback = arguments.length > 2 ? arguments[2] : undefined;
+/**
+ * Creates a {@link MediaInfo} instance with the specified options.
+ *
+ * @typeParam TFormat - The format type, defaults to `object`.
+ * @param options - Configuration options for creating the {@link MediaInfo} instance.
+ * @returns A promise that resolves to a {@link MediaInfo} instance when no callback is provided.
+ */
+
+/**
+ * Creates a {@link MediaInfo} instance with the specified options and executes the callback.
+ *
+ * @typeParam TFormat - The format type, defaults to `object`.
+ * @param options - Configuration options for creating the {@link MediaInfo} instance.
+ * @param callback - Function to call with the {@link MediaInfo} instance.
+ * @param errCallback - Optional function to call on error.
+ */
+
+function mediaInfoFactory(options = {}, callback, errCallback) {
   if (callback === undefined) {
     return new Promise((resolve, reject) => {
       mediaInfoFactory(options, resolve, reject);
@@ -740,7 +846,7 @@ function mediaInfoFactory() {
     print: noopPrint,
     printErr: noopPrint,
     locateFile: locateFile ?? defaultLocateFile,
-    // Pass custom WASM module if provided
+    // Pass through the pre-compiled WASM module required by Cloudflare Workers.
     wasmModule: options.wasmModule,
     onAbort: err => {
       if (errCallback) {
@@ -759,8 +865,17 @@ function mediaInfoFactory() {
   });
 }
 
+/**
+ * Checks if a given object is of a specified track type.
+ *
+ * @template T - The type of track to check for.
+ * @param thing - The object to check.
+ * @param type - The track type to check against.
+ * @returns A boolean indicating whether the object is of the specified track type.
+ */
 function isTrackType(thing, type) {
   return thing !== null && typeof thing === 'object' && thing['@type'] === type;
 }
 
 export { mediaInfoFactory as default, isTrackType, mediaInfoFactory };
+//# sourceMappingURL=index.js.map
