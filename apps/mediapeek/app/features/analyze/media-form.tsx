@@ -8,6 +8,7 @@ import {
   type SyntheticEvent,
   useRef,
   useState,
+  useEffect,
 } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert"
@@ -39,6 +40,11 @@ export function MediaForm() {
 
   const [formError, setFormError] = useState<string | null>(null)
   const [inputValue, setInputValue] = useState("")
+
+  useEffect(() => {
+    const prefill = new URL(window.location.href).searchParams.get("url")
+    if (prefill) setInputValue(prefill)
+  }, [])
   const [isClipboardDialogOpen, setIsClipboardDialogOpen] = useState(false)
   const pendingUrlRef = useRef<string | null>(null)
 
