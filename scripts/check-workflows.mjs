@@ -12,7 +12,6 @@ const yamlFilePaths = [
     .map(
       (fileName) => new URL(`../.github/workflows/${fileName}`, import.meta.url)
     ),
-  new URL("../.github/actions/sync-issue-labels/action.yml", import.meta.url),
 ]
 
 const yamlContents = await Promise.all(
