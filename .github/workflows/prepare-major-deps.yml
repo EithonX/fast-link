@@ -22,7 +22,7 @@ jobs:
       - name: Resolve major compiler linter and animation upgrades from npm
         run: |
           set -euo pipefail
-          # Re-resolve peers with maintained React lint tooling and supported TypeScript.
+          # Build an npm dependency tree and verify lint, types, tests and the Worker bundle.
           rm package-lock.json
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm ci --ignore-scripts --no-audit --no-fund
