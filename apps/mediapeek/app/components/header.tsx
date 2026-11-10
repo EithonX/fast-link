@@ -1,5 +1,7 @@
+import { FlashIcon } from "@hugeicons/core-free-icons"
 import { Link } from "@tanstack/react-router"
 
+import { Icon } from "~/components/ui/icon"
 import { ModeToggle } from "~/features/settings/mode-toggle"
 import { cn } from "~/lib/utils"
 
@@ -17,34 +19,33 @@ export function Header({ className, sticky = true }: HeaderProps) {
         className
       )}
     >
-      <div className="flex h-14 w-full items-center gap-3 px-6 md:h-16 md:px-8 lg:px-10 xl:px-14">
+      <div className="flex h-14 w-full items-center gap-3 px-4 md:h-16 md:px-8 lg:px-10 xl:px-14">
         <Link
           to="/"
           viewTransition
-          className="flex min-w-0 items-center gap-3 no-underline"
+          className="flex min-w-0 items-center gap-2.5 no-underline"
         >
-          <div className="relative h-10 w-10 shrink-0">
-            <img
-              src="/badges/icon-light.webp"
-              alt="MediaPeek Logo"
-              className="hidden h-full w-full object-contain dark:block"
-            />
-            <img
-              src="/badges/icon-dark.webp"
-              alt="MediaPeek Logo"
-              className="h-full w-full object-contain dark:hidden"
-            />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-lg font-semibold tracking-tight">
-              MediaPeek
-            </p>
-          </div>
+          <span className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-xl">
+            <Icon icon={FlashIcon} size={20} />
+          </span>
+          <span className="truncate text-lg font-semibold tracking-tight">
+            FastLink
+          </span>
         </Link>
 
-        <div className="ml-auto flex items-center gap-2">
+        <nav aria-label="Main navigation" className="ml-auto flex min-w-0 items-center gap-2 sm:gap-5">
+          <Link to="/fastlink" viewTransition
+            activeProps={{ className: "font-semibold text-foreground" }}
+            className="text-muted-foreground hover:text-foreground px-1 text-xs font-medium transition-colors sm:text-sm">
+            Fast Links
+          </Link>
+          <Link to="/app" viewTransition
+            activeProps={{ className: "font-semibold text-foreground" }}
+            className="text-muted-foreground hover:text-foreground px-1 text-xs font-medium transition-colors sm:text-sm">
+            Analyze
+          </Link>
           <ModeToggle />
-        </div>
+        </nav>
       </div>
     </header>
   )
