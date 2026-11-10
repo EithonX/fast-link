@@ -11,6 +11,7 @@ import {
 import { safeMediaFetch } from "../../../mediapeek-analyzer/src/services/safe-media-fetch.server"
 
 interface FastLinkEnvironment {
+  APP_ENV?: string
   BOT_TOKEN?: string
   TELEGRAM_WEBHOOK_SECRET?: string
   WORKER_BASE_URL?: string
