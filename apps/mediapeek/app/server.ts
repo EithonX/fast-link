@@ -9,6 +9,7 @@ import { env as workerEnv } from "cloudflare:workers"
 
 import { DEVTOOLS_WELL_KNOWN_PATH } from "~/constants"
 import { withRequestLogging } from "~/lib/request-logger.server"
+import { handleFastLinkRequest } from "~/services/fastlink.server"
 import { createContentSecurityPolicy } from "~/security/content-security-policy"
 
 const applySecurityHeaders = (
@@ -50,6 +51,11 @@ const applySecurityHeaders = (
 const entry = createServerEntry({
   async fetch(request, opts) {
     const url = new URL(request.url)
+
+    const fastLinkResponse = await handleFastLinkRequest(request, workerEnv)
+    if (fastLinkResponse !== null) {
+      return fastLinkResponse
+    }
 
     if (url.pathname === DEVTOOLS_WELL_KNOWN_PATH) {
       return new Response("{}", {
