@@ -1,4 +1,4 @@
-import { Copy, FileText, MoreVertical, Quote, Share } from 'lucide-react';
+import { Copy, Download, FileText, MoreVertical, Quote, Share } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -35,6 +35,7 @@ import { Switch } from '~/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { useMediaActions } from '~/hooks/use-media-actions';
 import { useMediaQuery } from '~/hooks/use-media-query';
+import type { ReportFormat } from '~/lib/report-export';
 
 interface OptionsMenuProps {
   data: Record<string, string>;
@@ -49,8 +50,7 @@ interface OptionsMenuProps {
 }
 
 // Formats for copy and share actions
-const formats = [
-  { id: 'json', label: 'Object' },
+const formats: { id: ReportFormat; label: string }[] = [
   { id: 'json', label: 'JSON' },
   { id: 'text', label: 'Text' },
   { id: 'xml', label: 'XML' },
@@ -68,7 +68,7 @@ export function OptionsMenu({
   className,
   onShareSuccess,
 }: OptionsMenuProps) {
-  const { handleCopy, getShareUrl } = useMediaActions({ data, url });
+  const { handleCopy, getShareUrl, downloadReport } = useMediaActions({ data, url });
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [open, setOpen] = React.useState(false);
 
@@ -98,10 +98,13 @@ export function OptionsMenu({
     }
   };
 
-  const copyToClipboard = () => {
-    if (shareData?.url) {
-      navigator.clipboard.writeText(shareData.url);
+  const copyToClipboard = async () => {
+    if (!shareData?.url) return;
+    try {
+      await navigator.clipboard.writeText(shareData.url);
       toast.success('Link copied to clipboard');
+    } catch {
+      toast.error('Clipboard access denied. Select and copy the link manually.');
     }
   };
 
@@ -128,7 +131,7 @@ export function OptionsMenu({
               </Label>
               <Input
                 id="link"
-                defaultValue={shareData?.url}
+                value={shareData?.url ?? ''}
                 readOnly
                 className="w-full"
                 tabIndex={-1}
@@ -140,7 +143,7 @@ export function OptionsMenu({
               type="submit"
               size="sm"
               className="w-full px-3 sm:w-auto"
-              onClick={copyToClipboard}
+              onClick={() => void copyToClipboard()}
             >
               <span className="sr-only">Copy</span>
               <span>Copy Link</span>
@@ -218,12 +221,26 @@ export function OptionsMenu({
                 <span>Copy Metadata</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-48">
-                {formats.map((fmt, i) => (
+                {formats.map((fmt) => (
                   <DropdownMenuItem
-                    key={`${fmt.id}-${i}`}
+                    key={fmt.id}
                     onClick={() => handleCopy(fmt.id, fmt.label)}
                   >
                     Copy {fmt.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Download className="mr-2 h-4 w-4" />
+                <span>Download Report</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-48">
+                {formats.map((fmt) => (
+                  <DropdownMenuItem key={fmt.id} onSelect={() => void downloadReport(fmt.id, fmt.label, filename)}>
+                    Save {fmt.label}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuSubContent>
@@ -235,9 +252,9 @@ export function OptionsMenu({
                 <span>Share Metadata</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-48">
-                {formats.map((fmt, i) => (
+                {formats.map((fmt) => (
                   <DropdownMenuItem
-                    key={`${fmt.id}-${i}`}
+                    key={fmt.id}
                     onClick={() => handleShareClick(fmt.id, fmt.label)}
                   >
                     Share {fmt.label}
@@ -295,8 +312,9 @@ export function OptionsMenu({
               <Separator className="my-2" />
 
               <Tabs defaultValue="copy" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="copy">Copy</TabsTrigger>
+                  <TabsTrigger value="download">Save</TabsTrigger>
                   <TabsTrigger value="share">Share</TabsTrigger>
                 </TabsList>
                 <TabsContent value="copy" className="mt-4">
@@ -304,9 +322,9 @@ export function OptionsMenu({
                     Select a format to copy metadata to clipboard.
                   </p>
                   <div className="grid grid-cols-3 gap-2">
-                    {formats.map((fmt, i) => (
+                    {formats.map((fmt) => (
                       <Button
-                        key={`copy-${fmt.id}-${i}`}
+                        key={'copy-' + fmt.id}
                         variant="ghost"
                         size="sm"
                         className="bg-muted/30 hover:bg-muted/50 border"
@@ -320,14 +338,29 @@ export function OptionsMenu({
                     ))}
                   </div>
                 </TabsContent>
+                <TabsContent value="download" className="mt-4">
+                  <p className="text-muted-foreground mb-3 text-xs">Download a local copy of the media report.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {formats.map((fmt) => (
+                      <Button
+                        key={'download-' + fmt.id}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { void downloadReport(fmt.id, fmt.label, filename); setOpen(false); }}
+                      >
+                        {fmt.label}
+                      </Button>
+                    ))}
+                  </div>
+                </TabsContent>
                 <TabsContent value="share" className="mt-4">
                   <p className="text-muted-foreground mb-3 text-xs">
                     Select a format to secure share via PrivateBin.
                   </p>
                   <div className="grid grid-cols-3 gap-2">
-                    {formats.map((fmt, i) => (
+                    {formats.map((fmt) => (
                       <Button
-                        key={`share-${fmt.id}-${i}`}
+                        key={'share-' + fmt.id}
                         variant="ghost"
                         size="sm"
                         className="bg-muted/30 hover:bg-muted/50 border"
