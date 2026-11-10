@@ -14,7 +14,8 @@ export function Footer() {
   return (
     <footer className="border-t">
       <div className="flex w-full flex-col gap-3 px-6 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between md:px-8 lg:px-10 xl:px-14">
-        <p className="shrink-0">MediaPeek © {CURRENT_YEAR}</p>
+        <p className="shrink-0">FastLink © {CURRENT_YEAR}</p>
+        <p className="text-xs">Built on <a className="underline underline-offset-4" href="https://github.com/DG02002/mediapeek" target="_blank" rel="noreferrer">MediaPeek</a> · <a className="underline underline-offset-4" href="https://github.com/EithonX/fast-link" target="_blank" rel="noreferrer">Source</a></p>
         <nav aria-label="Policies">
           <ul className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {policyLinks.map((link, index) => (
