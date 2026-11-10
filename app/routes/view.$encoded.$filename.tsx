@@ -35,7 +35,7 @@ export async function loader({
     ? decodeURIComponent(params.filename)
     : 'file';
 
-  let originalUrl = '';
+  let originalUrl: string;
   try {
     originalUrl = atob(decodeURIComponent(encoded));
   } catch {
@@ -72,8 +72,6 @@ export async function loader({
     // Ignore
   }
 
-  let mediaType: LoaderData['mediaType'] = 'unknown';
-
   // Helper to determine media category from MIME type
   const getCategoryFromType = (
     type: string,
@@ -85,7 +83,7 @@ export async function loader({
     return 'unknown';
   };
 
-  mediaType = getCategoryFromType(contentType);
+  let mediaType = getCategoryFromType(contentType);
 
   // Fallback: If unknown, try to guess from filename extension
   if (mediaType === 'unknown' && filename) {
