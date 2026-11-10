@@ -230,4 +230,51 @@ describe('fetchMediaChunk', () => {
     expect(result.byteSource).toBeUndefined();
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
+
+  it('rejects shifted 206 ranges instead of treating them as the requested bytes', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    fetchSpy
+      .mockResolvedValueOnce(makeResponse(null, {
+        status: 200,
+        headers: { 'content-type': 'application/octet-stream', 'content-length': '30' },
+      }))
+      .mockResolvedValueOnce(makeResponse(new Uint8Array(10), {
+        status: 206,
+        headers: { 'content-range': 'bytes 0-9/30' },
+      }))
+      .mockResolvedValueOnce(makeResponse(new Uint8Array(19), {
+        status: 206,
+        headers: { 'content-range': 'bytes 11-29/30' },
+      }));
+
+    const result = await fetchMediaChunk('https://example.com/video.mp4');
+    expect(result.byteSource).toBeDefined();
+    await expect(result.byteSource?.readChunk(4, 20))
+      .rejects.toThrow('Origin returned a shifted byte range.');
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects unexpectedly large seek responses instead of buffering full downloads', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    fetchSpy
+      .mockResolvedValueOnce(makeResponse(null, {
+        status: 200,
+        headers: { 'content-type': 'application/octet-stream', 'content-length': '30000000' },
+      }))
+      .mockResolvedValueOnce(makeResponse(new Uint8Array(10), {
+        status: 206,
+        headers: { 'content-range': 'bytes 0-9/30000000' },
+      }))
+      .mockResolvedValueOnce(makeResponse(new Uint8Array(10 * 1024 * 1024 + 1), {
+        status: 200,
+        headers: { 'content-type': 'application/octet-stream' },
+      }));
+
+    const result = await fetchMediaChunk('https://example.com/large.mp4');
+    expect(result.byteSource).toBeDefined();
+    await expect(result.byteSource?.readChunk(4, 200))
+      .rejects.toThrow('Media source returned more bytes than requested.');
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
 });
