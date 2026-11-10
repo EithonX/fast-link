@@ -26,6 +26,8 @@ export function startNativeViewTransition(
     typeof document.startViewTransition === 'function'
   ) {
     document.startViewTransition(() => {
+      // Sync the committed DOM before the browser captures the transition snapshot.
+      // eslint-disable-next-line @eslint-react/dom-no-flush-sync
       flushSync(() => {
         updateCallback();
       });
