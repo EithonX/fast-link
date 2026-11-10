@@ -109,8 +109,8 @@ if (configParsed) {
         failures.push(
           `ANALYZER service binding appears ${analyzerBindings.length} times; expected 1`
         )
-      } else if (analyzerBindings[0].service !== "mediapeek-analyzer") {
-        failures.push("ANALYZER service must target mediapeek-analyzer")
+      } else if (analyzerBindings[0].service !== "fastlink-analyzer") {
+        failures.push("ANALYZER service must target fastlink-analyzer")
       }
 
       const rateLimiters = Array.isArray(config.ratelimits)
