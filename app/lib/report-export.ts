@@ -17,7 +17,8 @@ export function mediaReportFilename(
 ): string {
   const basename = name.split(/[\\/]/).pop() || 'media-report';
   const cleaned = basename
-    .replace(/[<>:"|?*\x00-\x1f\x7f]/g, '_')
+    .replace(/[<>:"|?*]/g, '_')
+    .replace(/\p{Cc}/gu, '_')
     .trim()
     .slice(0, 140) || 'media-report';
 
