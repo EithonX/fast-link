@@ -1,0 +1,55 @@
+name: Stage selected MediaInfo engine
+on:
+  push:
+    branches: [maintenance/mediainfo-engine-upstream]
+permissions:
+  contents: write
+jobs:
+  stage:
+    if: "github.event.head_commit.message == 'ci: stage selected MediaInfo engine from pinned upstream'"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: maintenance/mediainfo-engine-upstream
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Fetch pinned upstream source only
+        run: |
+          set -euo pipefail
+          up="$RUNNER_TEMP/media-engine"
+          git init -q "$up"
+          git -C "$up" fetch --quiet --depth=1 https://github.com/DG02002/mediapeek.git 621a315e79298d14223782b4d9dd1f8c9803034d
+          git -C "$up" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$up" rev-parse HEAD)" = "621a315e79298d14223782b4d9dd1f8c9803034d"
+          cp "$up/apps/mediapeek-analyzer/src/lib/mediainfo-bundle.js" app/lib/mediainfo-bundle.js
+          sed -i '1i /* eslint-disable */\n// @ts-nocheck' app/lib/mediainfo-bundle.js
+          cp "$up/apps/mediapeek-analyzer/src/services/MediaInfoModule.wasm" app/services/MediaInfoModule.wasm
+          cp "$up/packages/shared/src/archive-inspection.ts" app/lib/archive-inspection.ts
+          cp "$up/packages/shared/src/archive-inspection.test.ts" app/lib/archive-inspection.test.ts
+          cp "$up/packages/shared/src/filename-resolution.ts" app/lib/filename-resolution.ts
+          cp "$up/packages/shared/src/filename-resolution.test.ts" app/lib/filename-resolution.test.ts
+      - name: Refresh only MediaInfo npm dependency in lockfile
+        run: |
+          npm install 'mediainfo.js@^0.3.8' --package-lock-only --ignore-scripts --no-audit --no-fund
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs'
+          import assert from 'node:assert/strict'
+          const pkg = JSON.parse(readFileSync('package.json','utf8'))
+          const lock = JSON.parse(readFileSync('package-lock.json','utf8'))
+          assert.equal(pkg.dependencies['mediainfo.js'], '^0.3.8')
+          assert.equal(lock.packages['node_modules/mediainfo.js'].version, '0.3.8')
+          NODE
+      - name: Commit only source files and npm metadata
+        run: |
+          set -euo pipefail
+          git add -- app/lib/mediainfo-bundle.js app/services/MediaInfoModule.wasm app/lib/archive-inspection.ts app/lib/archive-inspection.test.ts app/lib/filename-resolution.ts app/lib/filename-resolution.test.ts package.json package-lock.json
+          test -z "$(git status --porcelain | grep -v '^??' | grep -v '^M  \|^A  ' || true)" || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: update MediaInfo engine and archive parsing from pinned MediaPeek"
+          git push origin HEAD:maintenance/mediainfo-engine-upstream
