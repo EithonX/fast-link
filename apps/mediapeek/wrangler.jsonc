@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "mediapeek",
+  "name": "dl",
   "compatibility_date": "2026-10-13",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./app/server.ts",
@@ -8,7 +8,7 @@
   "services": [
     {
       "binding": "ANALYZER",
-      "service": "mediapeek-analyzer",
+      "service": "fastlink-analyzer",
     },
   ],
   "vars": {
@@ -20,6 +20,8 @@
     "TURNSTILE_ENABLED": "false",
     "ANALYZE_RATE_LIMIT_PER_MINUTE": "30",
   },
+  // Optional Telegram bot support requires BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET secrets.
+  // Public FastLink proxy and /info routes require no secrets.
   // Required secrets when TURNSTILE_ENABLED=true:
   // wrangler secret put TURNSTILE_SECRET_KEY
   // wrangler secret put TURNSTILE_GRANT_SECRET
