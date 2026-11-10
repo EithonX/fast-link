@@ -14,6 +14,7 @@ import {
   resolveGoogleDriveUrl,
   validateUrl,
 } from '~/lib/server-utils';
+import { safeMediaFetch } from '~/lib/safe-media-fetch.server';
 import { fastLinkEmitter } from '~/services/event-bus.server';
 
 export interface FetchDiagnostics {
@@ -266,7 +267,7 @@ const fetchZipTailBuffer = async (
   }
 
   const start = Math.max(0, totalSize - ZIP_TAIL_INSPECTION_BYTES);
-  const response = await fetch(url, {
+  const response = await safeMediaFetch(url, {
     headers: getEmulationHeaders(
       `bytes=${String(start)}-${String(totalSize - 1)}`,
     ),
@@ -357,7 +358,7 @@ const createRemoteByteSource = (
       return;
     }
 
-    const response = await fetch(url, {
+    const response = await safeMediaFetch(url, {
       headers: getEmulationHeaders(
         `bytes=${String(spanStart)}-${String(spanEnd - 1)}`,
       ),
@@ -481,7 +482,7 @@ export async function fetchMediaChunk(
 
   const tHead = performance.now();
   let probeMethod = 'HEAD';
-  let headRes = await fetch(targetUrl, {
+  let headRes = await safeMediaFetch(targetUrl, {
     method: 'HEAD',
     headers: getEmulationHeaders(),
     redirect: 'follow',
@@ -489,7 +490,7 @@ export async function fetchMediaChunk(
 
   if (headRes.status === 405) {
     probeMethod = 'GET';
-    headRes = await fetch(targetUrl, {
+    headRes = await safeMediaFetch(targetUrl, {
       method: 'GET',
       headers: getEmulationHeaders('bytes=0-0'),
       redirect: 'follow',
@@ -540,7 +541,7 @@ export async function fetchMediaChunk(
   let rangeReadTimedOut = false;
 
   for (let attempt = 0; attempt <= MAX_FIRST_BYTE_READ_RETRIES; attempt += 1) {
-    const attemptResponse = await fetch(targetUrl, {
+    const attemptResponse = await safeMediaFetch(targetUrl, {
       headers: getEmulationHeaders(`bytes=0-${String(fetchEnd)}`),
       redirect: 'follow',
     });
@@ -578,7 +579,7 @@ export async function fetchMediaChunk(
   }
 
   if (!response || !reader) {
-    const fallbackResponse = await fetch(targetUrl, {
+    const fallbackResponse = await safeMediaFetch(targetUrl, {
       headers: getEmulationHeaders(),
       redirect: 'follow',
     });
