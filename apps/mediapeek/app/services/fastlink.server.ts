@@ -1,8 +1,12 @@
 import {
   extractFilenameFromUrl,
-  isValidFilename,
   parseContentDispositionFilename,
 } from "@mediapeek/shared/filename-resolution"
+import {
+  decodeFastLinkUrl,
+  makeFastLink,
+  parseFastLinkUrl,
+} from "@mediapeek/shared/fastlink"
 
 import { safeMediaFetch } from "../../../mediapeek-analyzer/src/services/safe-media-fetch.server"
 
@@ -18,7 +22,6 @@ interface FileInfo {
   type: string
 }
 
-const MAX_ENCODED_URL_LENGTH = 12_000
 const MAX_TELEGRAM_BODY_BYTES = 16_384
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
 const PROXY_PATH = "/resources/proxy"
@@ -36,37 +39,6 @@ const textResponse = (message: string, status = 400) =>
     status,
     headers: { "Content-Type": "text/plain; charset=utf-8" },
   })
-
-const parsePublicUrl = (value: string) => {
-  const parsed = new URL(value)
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("Only HTTP and HTTPS URLs are supported.")
-  }
-
-  return parsed.toString()
-}
-
-export const encodeFastLinkUrl = (source: string) =>
-  encodeURIComponent(btoa(parsePublicUrl(source)))
-
-export const decodeFastLinkUrl = (encoded: string): string => {
-  if (encoded.length === 0 || encoded.length > MAX_ENCODED_URL_LENGTH) {
-    throw new Error("Invalid FastLink URL.")
-  }
-
-  return parsePublicUrl(atob(decodeURIComponent(encoded)))
-}
-
-export const makeFastLink = (
-  baseUrl: string,
-  source: string,
-  filename?: string
-) => {
-  const name = filename?.trim() || extractFilenameFromUrl(source)
-  const path = "/p/" + encodeFastLinkUrl(source)
-  return baseUrl.replace(/\/+$/u, "") +
-    path + (isValidFilename(name) ? "/" + encodeURIComponent(name) : "")
-}
 
 const resolveSize = (response: Response) => {
   const contentRange = response.headers.get("content-range")
@@ -122,7 +94,7 @@ async function handleInfo(url: URL, request: Request) {
   }
 
   try {
-    const info = await getFileInfo(parsePublicUrl(source))
+    const info = await getFileInfo(parseFastLinkUrl(source))
     return Response.json(info, {
       headers: { "Cache-Control": "no-store", ...corsHeaders },
     })
@@ -174,7 +146,7 @@ async function handleProxy(
     const range = request.headers.get("range")
     if (range) headers.set("Range", range)
 
-    const response = await safeMediaFetch(parsePublicUrl(source), {
+    const response = await safeMediaFetch(parseFastLinkUrl(source), {
       method: request.method,
       headers,
       signal: request.signal,
@@ -239,7 +211,7 @@ const handleTelegram = async (
       return textResponse("OK", 200)
     }
 
-    const mediaUrl = parsePublicUrl(message.text.trim())
+    const mediaUrl = parseFastLinkUrl(message.text.trim())
     const info = await getFileInfo(mediaUrl)
     const baseUrl = env.WORKER_BASE_URL?.trim() || new URL(request.url).origin
     const fastLink = makeFastLink(baseUrl, mediaUrl, info.filename)
