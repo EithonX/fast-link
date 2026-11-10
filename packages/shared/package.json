@@ -75,6 +75,10 @@
     "./evlog": {
       "types": "./dist/evlog.d.ts",
       "default": "./src/evlog.ts"
+    },
+    "./fastlink": {
+      "types": "./dist/fastlink.d.ts",
+      "default": "./src/fastlink.ts"
     }
   },
   "scripts": {
