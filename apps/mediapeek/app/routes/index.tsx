@@ -25,8 +25,14 @@ const capabilities = [
   {
     id: "fast-links",
     title: "Direct Fast Links",
-    description: "Turn public HTTP(S) media URLs into shareable edge links with range-aware streaming and browser-based history.",
-    specs: ["Cloudflare streaming proxy", "Resumable range requests", "Copy, preview, download", "No account required"],
+    description:
+      "Turn public HTTP(S) media URLs into shareable edge links with range-aware streaming and browser-based history.",
+    specs: [
+      "Cloudflare streaming proxy",
+      "Resumable range requests",
+      "Copy, preview, download",
+      "No account required",
+    ],
   },
   {
     id: "partial-fetching",
@@ -141,7 +147,8 @@ function HomePage() {
               FastLink
             </h1>
             <p className="text-muted-foreground mt-5 max-w-3xl text-lg leading-relaxed sm:text-xl">
-              Generate direct links and inspect media details in one fast, reliable workspace.
+              Generate direct links and inspect media details in one fast,
+              reliable workspace.
             </p>
             <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
               <Link
@@ -154,7 +161,10 @@ function HomePage() {
               <Link
                 to="/app"
                 viewTransition
-                className={cn(buttonVariants({ size: "lg", variant: "outline" }), "min-w-40")}
+                className={cn(
+                  buttonVariants({ size: "lg", variant: "outline" }),
+                  "min-w-40"
+                )}
               >
                 Analyze Media
               </Link>
@@ -282,8 +292,8 @@ function HomePage() {
                     Metadata engine
                   </h2>
                   <p className="text-muted-foreground max-w-3xl text-base leading-relaxed sm:text-lg">
-                    FastLink uses mediainfo.js for metadata analysis. It runs
-                    in WebAssembly and is based on MediaInfoLib.
+                    FastLink uses mediainfo.js for metadata analysis. It runs in
+                    WebAssembly and is based on MediaInfoLib.
                   </p>
                 </div>
               </div>
@@ -340,8 +350,9 @@ function HomePage() {
                     Built in public, maintained on GitHub.
                   </h2>
                   <p className="text-muted-foreground max-w-2xl text-base leading-relaxed sm:text-lg">
-                    FastLink is open source and builds on MediaPeek. Browse the repository,
-                    review issues, track releases, and follow development.
+                    FastLink is open source and builds on MediaPeek. Browse the
+                    repository, review issues, track releases, and follow
+                    development.
                   </p>
                 </div>
 

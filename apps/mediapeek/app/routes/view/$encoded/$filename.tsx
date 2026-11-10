@@ -16,9 +16,12 @@ const inferKind = (filename: string, contentType = ""): MediaKind => {
   if (contentType === "application/pdf") return "pdf"
 
   const ext = filename.split(".").at(-1)?.toLowerCase()
-  if (["mp4", "webm", "mov", "m4v", "mkv", "avi"].includes(ext ?? "")) return "video"
-  if (["mp3", "flac", "wav", "m4a", "aac", "ogg"].includes(ext ?? "")) return "audio"
-  if (["jpg", "jpeg", "png", "gif", "webp", "avif"].includes(ext ?? "")) return "image"
+  if (["mp4", "webm", "mov", "m4v", "mkv", "avi"].includes(ext ?? ""))
+    return "video"
+  if (["mp3", "flac", "wav", "m4a", "aac", "ogg"].includes(ext ?? ""))
+    return "audio"
+  if (["jpg", "jpeg", "png", "gif", "webp", "avif"].includes(ext ?? ""))
+    return "image"
   if (ext === "pdf") return "pdf"
   return "unknown"
 }
@@ -40,7 +43,7 @@ function FilePreview() {
     const controller = new AbortController()
     const query = "/info?url=" + encodeURIComponent(source)
     void fetch(query, { signal: controller.signal })
-      .then((response) => response.ok ? response.json() : null)
+      .then((response) => (response.ok ? response.json() : null))
       .then((info: { type?: string; size?: number } | null) => {
         if (info?.type) setContentType(info.type)
         if (info?.size) setFileSize(info.size)
@@ -67,18 +70,24 @@ function FilePreview() {
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
               {contentType || "Media type unknown"}
-              {fileSize ? " · " + (fileSize / 1024 / 1024).toFixed(1) + " MB" : ""}
+              {fileSize
+                ? " · " + (fileSize / 1024 / 1024).toFixed(1) + " MB"
+                : ""}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             {source && (
-              <a href={proxy}
-                className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground">
+              <a
+                href={proxy}
+                className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground"
+              >
                 Download
               </a>
             )}
-            <Link to="/fastlink"
-              className="inline-flex h-10 items-center rounded-full border px-5 text-sm font-medium hover:bg-muted">
+            <Link
+              to="/fastlink"
+              className="inline-flex h-10 items-center rounded-full border px-5 text-sm font-medium hover:bg-muted"
+            >
               New link
             </Link>
           </div>
@@ -86,11 +95,17 @@ function FilePreview() {
 
         {!source ? (
           <p role="alert" className="text-destructive">
-            This FastLink URL is invalid. Generate a fresh link from the original source.
+            This FastLink URL is invalid. Generate a fresh link from the
+            original source.
           </p>
         ) : kind === "video" ? (
-          <video controls playsInline preload="metadata" src={inline}
-            className="aspect-video max-h-[75vh] w-full rounded-xl bg-black">
+          <video
+            controls
+            playsInline
+            preload="metadata"
+            src={inline}
+            className="aspect-video max-h-[75vh] w-full rounded-xl bg-black"
+          >
             Your browser cannot preview this video format.
           </video>
         ) : kind === "audio" ? (
@@ -101,19 +116,29 @@ function FilePreview() {
             </audio>
           </div>
         ) : kind === "image" ? (
-          <img src={inline} alt={filename}
-            className="mx-auto max-h-[75vh] max-w-full rounded-xl object-contain" />
+          <img
+            src={inline}
+            alt={filename}
+            className="mx-auto max-h-[75vh] max-w-full rounded-xl object-contain"
+          />
         ) : kind === "pdf" ? (
-          <iframe src={inline} title={filename}
-            className="h-[75vh] w-full rounded-xl border" />
+          <iframe
+            src={inline}
+            title={filename}
+            className="h-[75vh] w-full rounded-xl border"
+          />
         ) : (
           <div className="mx-auto max-w-xl rounded-xl border border-dashed p-10 text-center">
             <h2 className="text-lg font-semibold">Preview not available</h2>
             <p className="text-muted-foreground mt-2 text-sm">
               Download the file or open its original public URL.
             </p>
-            <a href={source} target="_blank" rel="noreferrer"
-              className="mt-4 inline-block text-sm font-semibold underline underline-offset-4">
+            <a
+              href={source}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-block text-sm font-semibold underline underline-offset-4"
+            >
               Open original source
             </a>
           </div>

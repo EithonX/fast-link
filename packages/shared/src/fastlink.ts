@@ -9,7 +9,9 @@ export const parseFastLinkUrl = (source: string): string => {
     target.username ||
     target.password
   ) {
-    throw new Error("Only public HTTP(S) links without embedded credentials are supported.")
+    throw new Error(
+      "Only public HTTP(S) links without embedded credentials are supported."
+    )
   }
 
   return target.toString()
@@ -32,11 +34,11 @@ export const makeFastLink = (
 ): string => {
   const canonicalUrl = parseFastLinkUrl(source)
   const name = filename?.trim() || extractFilenameFromUrl(canonicalUrl)
-  const suffix = isValidFilename(name)
-    ? "/" + encodeURIComponent(name)
-    : ""
+  const suffix = isValidFilename(name) ? "/" + encodeURIComponent(name) : ""
   return (
     baseUrl.replace(/\/+$/u, "") +
-    "/p/" + encodeFastLinkUrl(canonicalUrl) + suffix
+    "/p/" +
+    encodeFastLinkUrl(canonicalUrl) +
+    suffix
   )
 }

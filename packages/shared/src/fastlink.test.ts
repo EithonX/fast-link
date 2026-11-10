@@ -5,7 +5,11 @@ import { decodeFastLinkUrl, makeFastLink, parseFastLinkUrl } from "./fastlink"
 describe("FastLink URL compatibility", () => {
   it("keeps the /p/ format used by existing links", () => {
     const source = "https://files.example.org/media/trailer.mp4?key=a%2Fb"
-    const fastLink = makeFastLink("https://dl.example.org/", source, "trailer.mp4")
+    const fastLink = makeFastLink(
+      "https://dl.example.org/",
+      source,
+      "trailer.mp4"
+    )
     const part = new URL(fastLink).pathname.split("/")[2]
     expect(decodeFastLinkUrl(part)).toBe(source)
     expect(fastLink).toContain("/p/")

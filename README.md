@@ -21,11 +21,11 @@ FastLink supports ordinary publicly accessible media. Access restrictions, permi
 
 The new application uses the upstream **pnpm workspace**, **TanStack Start**, **React**, **TypeScript**, **Effect**, **Vite**, and two **Cloudflare Workers**.
 
-| Component | Location | Default Worker name |
-| --- | --- | --- |
-| Web app, FastLink routes and report UI | `apps/mediapeek` | `dl` |
+| Component                                   | Location                  | Default Worker name |
+| ------------------------------------------- | ------------------------- | ------------------- |
+| Web app, FastLink routes and report UI      | `apps/mediapeek`          | `dl`                |
 | MediaInfo analyzer and safe ranged fetching | `apps/mediapeek-analyzer` | `fastlink-analyzer` |
-| Shared contracts and URL codec | `packages/shared` | — |
+| Shared contracts and URL codec              | `packages/shared`         | —                   |
 
 The web Worker uses the `ANALYZER` service binding to call the analyzer. The separate analyzer must exist before deploying the web Worker. Internal upstream workspace/package names remain unchanged to minimize migration risk.
 

@@ -1,9 +1,7 @@
 "use client"
 
-import {
-  extractFilenameFromUrl,
-} from "@mediapeek/shared/filename-resolution"
 import { makeFastLink, parseFastLinkUrl } from "@mediapeek/shared/fastlink"
+import { extractFilenameFromUrl } from "@mediapeek/shared/filename-resolution"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useState, type FormEvent } from "react"
 
@@ -47,7 +45,8 @@ function FastLinkPage() {
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
-  const { history, addToHistory, removeFromHistory, clearHistory } = useHistory()
+  const { history, addToHistory, removeFromHistory, clearHistory } =
+    useHistory()
 
   const generate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -71,7 +70,9 @@ function FastLinkPage() {
       if (response.ok) {
         info = (await response.json()) as FileInfo
       } else {
-        setNotice("The file server did not provide metadata. The link is still available.")
+        setNotice(
+          "The file server did not provide metadata. The link is still available."
+        )
       }
     } catch {
       setNotice("Metadata is unavailable. You can still generate the link.")
@@ -79,11 +80,15 @@ function FastLinkPage() {
       setBusy(false)
     }
 
-    const filename = info?.filename || extractFilenameFromUrl(source) || "download"
+    const filename =
+      info?.filename || extractFilenameFromUrl(source) || "download"
     const link = makeFastLink(window.location.origin, source, filename)
     const size = info?.size ?? 0
     setResult({
-      source, filename, size, type: info?.type || "Unknown",
+      source,
+      filename,
+      size,
+      type: info?.type || "Unknown",
       link,
     })
     addToHistory({
@@ -100,7 +105,9 @@ function FastLinkPage() {
       await navigator.clipboard.writeText(text)
       setCopied(true)
     } catch {
-      setError("Clipboard access was denied. Select and copy the link manually.")
+      setError(
+        "Clipboard access was denied. Select and copy the link manually."
+      )
     }
   }
 
@@ -131,13 +138,17 @@ function FastLinkPage() {
             Make a direct link easier to use.
           </h1>
           <p className="text-muted-foreground max-w-xl leading-relaxed">
-            Generate a shareable, resumable link for a public media file. Preview it,
-            copy it, or open it in a download manager. Existing FastLink URLs still work.
+            Generate a shareable, resumable link for a public media file.
+            Preview it, copy it, or open it in a download manager. Existing
+            FastLink URLs still work.
           </p>
         </div>
 
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-7">
-          <form onSubmit={(event) => void generate(event)} className="space-y-4">
+          <form
+            onSubmit={(event) => void generate(event)}
+            className="space-y-4"
+          >
             <label htmlFor="fastlink-url" className="block text-sm font-medium">
               Direct file URL
             </label>
@@ -155,16 +166,29 @@ function FastLinkPage() {
                 aria-describedby={error ? "fastlink-error" : undefined}
                 aria-invalid={Boolean(error)}
               />
-              <Button type="submit" disabled={busy} size="lg" className="h-12 px-6">
+              <Button
+                type="submit"
+                disabled={busy}
+                size="lg"
+                className="h-12 px-6"
+              >
                 {busy ? "Checking file…" : "Generate link"}
               </Button>
             </div>
             {error && (
-              <p role="alert" id="fastlink-error" className="text-destructive text-sm">
+              <p
+                role="alert"
+                id="fastlink-error"
+                className="text-destructive text-sm"
+              >
                 {error}
               </p>
             )}
-            {notice && <p role="status" className="text-muted-foreground text-sm">{notice}</p>}
+            {notice && (
+              <p role="status" className="text-muted-foreground text-sm">
+                {notice}
+              </p>
+            )}
           </form>
 
           {result && (
@@ -174,7 +198,9 @@ function FastLinkPage() {
                   <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                     Ready to use
                   </p>
-                  <p className="mt-1 break-all text-base font-semibold">{result.filename}</p>
+                  <p className="mt-1 break-all text-base font-semibold">
+                    {result.filename}
+                  </p>
                   <p className="text-muted-foreground mt-1 text-sm">
                     {sizeLabel(result.size)} · {result.type}
                   </p>
@@ -184,7 +210,10 @@ function FastLinkPage() {
                 </span>
               </div>
 
-              <label className="block text-sm font-medium" htmlFor="generated-fastlink">
+              <label
+                className="block text-sm font-medium"
+                htmlFor="generated-fastlink"
+              >
                 Your FastLink
               </label>
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -195,22 +224,34 @@ function FastLinkPage() {
                   onFocus={(event) => event.currentTarget.select()}
                   className="bg-muted/40 border-input h-11 min-w-0 flex-1 rounded-lg border px-3 text-sm"
                 />
-                <Button onClick={() => void copy(result.link)} variant="outline" type="button">
+                <Button
+                  onClick={() => void copy(result.link)}
+                  variant="outline"
+                  type="button"
+                >
                   {copied ? "Copied" : "Copy link"}
                 </Button>
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <a href={result.link} target="_blank" rel="noreferrer"
-                  className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground hover:opacity-85">
+                <a
+                  href={result.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground hover:opacity-85"
+                >
                   Download
                 </a>
-                <a href={previewUrl(result.link)}
-                  className="inline-flex h-10 items-center rounded-full border px-5 text-sm font-medium hover:bg-muted">
+                <a
+                  href={previewUrl(result.link)}
+                  className="inline-flex h-10 items-center rounded-full border px-5 text-sm font-medium hover:bg-muted"
+                >
                   Preview file
                 </a>
-                <a href={"/app?url=" + encodeURIComponent(result.source)}
-                  className="inline-flex h-10 items-center rounded-full border px-5 text-sm font-medium hover:bg-muted">
+                <a
+                  href={"/app?url=" + encodeURIComponent(result.source)}
+                  className="inline-flex h-10 items-center rounded-full border px-5 text-sm font-medium hover:bg-muted"
+                >
                   Analyze metadata
                 </a>
               </div>
@@ -221,11 +262,15 @@ function FastLinkPage() {
         <section className="space-y-5" aria-labelledby="fastlink-history">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 id="fastlink-history" className="font-heading text-2xl font-semibold">
+              <h2
+                id="fastlink-history"
+                className="font-heading text-2xl font-semibold"
+              >
                 Recent links
               </h2>
               <p className="text-muted-foreground mt-1 text-sm">
-                Saved only in this browser. Existing FastLink history is preserved.
+                Saved only in this browser. Existing FastLink history is
+                preserved.
               </p>
             </div>
             {history.length > 0 && (
@@ -241,20 +286,32 @@ function FastLinkPage() {
           ) : (
             <ol className="divide-y divide-border rounded-xl border">
               {history.slice(0, 12).map((item) => (
-                <li key={item.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <li
+                  key={item.id}
+                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{item.filename}</p>
+                    <p className="truncate text-sm font-semibold">
+                      {item.filename}
+                    </p>
                     <p className="text-muted-foreground truncate text-xs">
                       {item.url} · {item.fileSize || "Size unavailable"}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => restore(item)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => restore(item)}
+                    >
                       Open
                     </Button>
-                    <Button variant="ghost" size="sm"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => removeFromHistory(item.id)}
-                      aria-label={"Remove " + item.filename}>
+                      aria-label={"Remove " + item.filename}
+                    >
                       Remove
                     </Button>
                   </div>
@@ -272,7 +329,12 @@ function FastLinkPage() {
 export const Route = createFileRoute("/fastlink")({
   head: () => ({
     title: "Fast Links - FastLink",
-    meta: [{ name: "description", content: "Generate and manage direct FastLink downloads." }],
+    meta: [
+      {
+        name: "description",
+        content: "Generate and manage direct FastLink downloads.",
+      },
+    ],
   }),
   component: FastLinkPage,
 })

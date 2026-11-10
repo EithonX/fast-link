@@ -33,15 +33,24 @@ export function Header({ className, sticky = true }: HeaderProps) {
           </span>
         </Link>
 
-        <nav aria-label="Main navigation" className="ml-auto flex min-w-0 items-center gap-2 sm:gap-5">
-          <Link to="/fastlink" viewTransition
+        <nav
+          aria-label="Main navigation"
+          className="ml-auto flex min-w-0 items-center gap-2 sm:gap-5"
+        >
+          <Link
+            to="/fastlink"
+            viewTransition
             activeProps={{ className: "font-semibold text-foreground" }}
-            className="text-muted-foreground hover:text-foreground px-1 text-xs font-medium transition-colors sm:text-sm">
+            className="text-muted-foreground hover:text-foreground px-1 text-xs font-medium transition-colors sm:text-sm"
+          >
             Fast Links
           </Link>
-          <Link to="/app" viewTransition
+          <Link
+            to="/app"
+            viewTransition
             activeProps={{ className: "font-semibold text-foreground" }}
-            className="text-muted-foreground hover:text-foreground px-1 text-xs font-medium transition-colors sm:text-sm">
+            className="text-muted-foreground hover:text-foreground px-1 text-xs font-medium transition-colors sm:text-sm"
+          >
             Analyze
           </Link>
           <ModeToggle />

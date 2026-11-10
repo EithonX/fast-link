@@ -9,8 +9,8 @@ import { env as workerEnv } from "cloudflare:workers"
 
 import { DEVTOOLS_WELL_KNOWN_PATH } from "~/constants"
 import { withRequestLogging } from "~/lib/request-logger.server"
-import { handleFastLinkRequest } from "~/services/fastlink.server"
 import { createContentSecurityPolicy } from "~/security/content-security-policy"
+import { handleFastLinkRequest } from "~/services/fastlink.server"
 
 const applySecurityHeaders = (
   response: Response,

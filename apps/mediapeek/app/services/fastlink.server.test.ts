@@ -2,18 +2,23 @@ import { makeFastLink } from "@mediapeek/shared/fastlink"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { safeMediaFetch } from "../../../mediapeek-analyzer/src/services/safe-media-fetch.server"
-
 import { handleFastLinkRequest } from "./fastlink.server"
 
-vi.mock("../../../mediapeek-analyzer/src/services/safe-media-fetch.server", () => ({
-  safeMediaFetch: vi.fn(),
-}))
+vi.mock(
+  "../../../mediapeek-analyzer/src/services/safe-media-fetch.server",
+  () => ({
+    safeMediaFetch: vi.fn(),
+  })
+)
 
 const remote = "https://media.example.org/video.mp4?token=temporary"
 const origin = "https://dl.example.org"
 
 const send = async (path: string, init?: RequestInit) => {
-  const response = await handleFastLinkRequest(new Request(origin + path, init), {})
+  const response = await handleFastLinkRequest(
+    new Request(origin + path, init),
+    {}
+  )
   if (!response) throw new Error("FastLink route returned no response")
   return response
 }
@@ -63,7 +68,9 @@ describe("FastLink compatibility routes", () => {
     vi.mocked(safeMediaFetch).mockResolvedValue(
       new Response("ok", { status: 200 })
     )
-    const response = await send("/resources/proxy?url=" + encodeURIComponent(remote))
+    const response = await send(
+      "/resources/proxy?url=" + encodeURIComponent(remote)
+    )
     expect(response.status).toBe(200)
     expect(await response.text()).toBe("ok")
   })

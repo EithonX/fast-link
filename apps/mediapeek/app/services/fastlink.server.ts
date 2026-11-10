@@ -1,12 +1,12 @@
 import {
-  extractFilenameFromUrl,
-  parseContentDispositionFilename,
-} from "@mediapeek/shared/filename-resolution"
-import {
   decodeFastLinkUrl,
   makeFastLink,
   parseFastLinkUrl,
 } from "@mediapeek/shared/fastlink"
+import {
+  extractFilenameFromUrl,
+  parseContentDispositionFilename,
+} from "@mediapeek/shared/filename-resolution"
 
 import { safeMediaFetch } from "../../../mediapeek-analyzer/src/services/safe-media-fetch.server"
 
@@ -57,8 +57,11 @@ const getFileInfo = async (source: string): Promise<FileInfo> => {
     method: "HEAD",
     signal: AbortSignal.timeout(20_000),
   })
-  if (!response.ok || (!response.headers.has("content-length") &&
-    !response.headers.has("content-type"))) {
+  if (
+    !response.ok ||
+    (!response.headers.has("content-length") &&
+      !response.headers.has("content-type"))
+  ) {
     void response.body?.cancel()
     response = await safeMediaFetch(source, {
       method: "GET",
@@ -72,9 +75,12 @@ const getFileInfo = async (source: string): Promise<FileInfo> => {
     throw new Error("The source returned HTTP " + response.status)
   }
 
-  const filename = parseContentDispositionFilename(
-    response.headers.get("content-disposition")
-  ) || extractFilenameFromUrl(response.url || source) || "download"
+  const filename =
+    parseContentDispositionFilename(
+      response.headers.get("content-disposition")
+    ) ||
+    extractFilenameFromUrl(response.url || source) ||
+    "download"
 
   const info: FileInfo = {
     filename: cleanFilename(filename),
@@ -110,9 +116,14 @@ async function handleInfo(url: URL, request: Request) {
 const copyProxyHeaders = (response: Response) => {
   const headers = new Headers(response.headers)
   for (const key of [
-    "set-cookie", "set-cookie2", "content-security-policy",
-    "access-control-allow-origin", "access-control-allow-credentials",
-    "connection", "transfer-encoding", "keep-alive",
+    "set-cookie",
+    "set-cookie2",
+    "content-security-policy",
+    "access-control-allow-origin",
+    "access-control-allow-credentials",
+    "connection",
+    "transfer-encoding",
+    "keep-alive",
   ]) {
     headers.delete(key)
   }
@@ -156,16 +167,21 @@ async function handleProxy(
     const outboundHeaders = copyProxyHeaders(response)
     if (filename) {
       const safeFilename = cleanFilename(filename)
-      const disposition =
-        forceInline || range ? "inline" : "attachment"
+      const disposition = forceInline || range ? "inline" : "attachment"
       outboundHeaders.set(
         "Content-Disposition",
-        disposition + '; filename="' + safeFilename.replace(/[^\x20-\x7E]/gu, "_") +
-          '"; filename*=UTF-8' + "''" + encodeURIComponent(safeFilename)
+        disposition +
+          '; filename="' +
+          safeFilename.replace(/[^\x20-\x7E]/gu, "_") +
+          '"; filename*=UTF-8' +
+          "''" +
+          encodeURIComponent(safeFilename)
       )
     }
-    const noBody = request.method === "HEAD" ||
-      response.status === 204 || response.status === 304
+    const noBody =
+      request.method === "HEAD" ||
+      response.status === 204 ||
+      response.status === 304
     return new Response(noBody ? null : response.body, {
       status: response.status,
       statusText: response.statusText,
@@ -204,11 +220,17 @@ const handleTelegram = async (
       return textResponse("OK", 200)
     }
     const message = payload.message
-    if (!message || typeof message !== "object" ||
-      !("text" in message) || typeof message.text !== "string" ||
-      !("chat" in message) || !message.chat ||
+    if (
+      !message ||
+      typeof message !== "object" ||
+      !("text" in message) ||
+      typeof message.text !== "string" ||
+      !("chat" in message) ||
+      !message.chat ||
       typeof message.chat !== "object" ||
-      !("id" in message.chat) || typeof message.chat.id !== "number") {
+      !("id" in message.chat) ||
+      typeof message.chat.id !== "number"
+    ) {
       return textResponse("OK", 200)
     }
 
@@ -216,8 +238,11 @@ const handleTelegram = async (
     const info = await getFileInfo(mediaUrl)
     const baseUrl = env.WORKER_BASE_URL?.trim() || new URL(request.url).origin
     const fastLink = makeFastLink(baseUrl, mediaUrl, info.filename)
-    const textBody = info.filename + "\n" +
-      (info.size ? String(info.size) + " bytes\n" : "") + fastLink
+    const textBody =
+      info.filename +
+      "\n" +
+      (info.size ? String(info.size) + " bytes\n" : "") +
+      fastLink
     const sent = await fetch(
       "https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage",
       {
@@ -226,8 +251,10 @@ const handleTelegram = async (
         body: JSON.stringify({ chat_id: message.chat.id, text: textBody }),
       }
     )
-    return textResponse(sent.ok ? "OK" : "Telegram delivery failed.",
-      sent.ok ? 200 : 502)
+    return textResponse(
+      sent.ok ? "OK" : "Telegram delivery failed.",
+      sent.ok ? 200 : 502
+    )
   } catch {
     return textResponse("Unable to process this URL.", 422)
   }
@@ -256,7 +283,12 @@ export async function handleFastLinkRequest(
     try {
       const source = decodeFastLinkUrl(parts[1])
       const filename = parts[2] ? decodeURIComponent(parts[2]) : undefined
-      return handleProxy(request, source, filename, url.searchParams.has("inline"))
+      return handleProxy(
+        request,
+        source,
+        filename,
+        url.searchParams.has("inline")
+      )
     } catch {
       return textResponse("Invalid encoded FastLink URL.")
     }

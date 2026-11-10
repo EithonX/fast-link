@@ -14,6 +14,7 @@ import { Route as AppIndexRouteImport } from "./routes/app/index"
 import { Route as AppItemItemIdRouteImport } from "./routes/app/item/$itemId"
 import { Route as AppRouteRouteImport } from "./routes/app/route"
 import { Route as CookiesRouteRouteImport } from "./routes/cookies/route"
+import { Route as FastlinkRouteImport } from "./routes/fastlink"
 import { Route as HealthzRouteImport } from "./routes/healthz"
 import { Route as IndexRouteImport } from "./routes/index"
 import { Route as LicensesRouteRouteImport } from "./routes/licenses/route"
@@ -23,6 +24,7 @@ import { Route as ResourceAnalyzeRouteImport } from "./routes/resource/analyze"
 import { Route as RobotsDottxtRouteImport } from "./routes/robots[.]txt"
 import { Route as TermsRouteRouteImport } from "./routes/terms/route"
 import { Route as UsageRouteRouteImport } from "./routes/usage/route"
+import { Route as ViewEncodedFilenameRouteImport } from "./routes/view/$encoded/$filename"
 
 const IndexRoute = IndexRouteImport.update({
   id: "/",
@@ -37,6 +39,11 @@ const AppRouteRoute = AppRouteRouteImport.update({
 const CookiesRouteRoute = CookiesRouteRouteImport.update({
   id: "/cookies",
   path: "/cookies",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FastlinkRoute = FastlinkRouteImport.update({
+  id: "/fastlink",
+  path: "/fastlink",
   getParentRoute: () => rootRouteImport,
 } as any)
 const HealthzRoute = HealthzRouteImport.update({
@@ -94,6 +101,11 @@ const AppItemItemIdRoute = AppItemItemIdRouteImport.update({
   path: "/item/$itemId",
   getParentRoute: () => AppRouteRoute,
 } as any)
+const ViewEncodedFilenameRoute = ViewEncodedFilenameRouteImport.update({
+  id: "/view/$encoded/$filename",
+  path: "/view/$encoded/$filename",
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
@@ -104,12 +116,14 @@ export interface FileRoutesByFullPath {
   "/privacy": typeof PrivacyRouteRoute
   "/terms": typeof TermsRouteRoute
   "/usage": typeof UsageRouteRoute
+  "/fastlink": typeof FastlinkRoute
   "/healthz": typeof HealthzRoute
   "/robots.txt": typeof RobotsDottxtRoute
   "/app/compare": typeof AppCompareRouteRoute
   "/resource/analyze": typeof ResourceAnalyzeRoute
   "/app/": typeof AppIndexRoute
   "/app/item/$itemId": typeof AppItemItemIdRoute
+  "/view/$encoded/$filename": typeof ViewEncodedFilenameRoute
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
@@ -119,12 +133,14 @@ export interface FileRoutesByTo {
   "/privacy": typeof PrivacyRouteRoute
   "/terms": typeof TermsRouteRoute
   "/usage": typeof UsageRouteRoute
+  "/fastlink": typeof FastlinkRoute
   "/healthz": typeof HealthzRoute
   "/robots.txt": typeof RobotsDottxtRoute
   "/app/compare": typeof AppCompareRouteRoute
   "/resource/analyze": typeof ResourceAnalyzeRoute
   "/app": typeof AppIndexRoute
   "/app/item/$itemId": typeof AppItemItemIdRoute
+  "/view/$encoded/$filename": typeof ViewEncodedFilenameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -136,12 +152,14 @@ export interface FileRoutesById {
   "/privacy": typeof PrivacyRouteRoute
   "/terms": typeof TermsRouteRoute
   "/usage": typeof UsageRouteRoute
+  "/fastlink": typeof FastlinkRoute
   "/healthz": typeof HealthzRoute
   "/robots.txt": typeof RobotsDottxtRoute
   "/app/compare": typeof AppCompareRouteRoute
   "/resource/analyze": typeof ResourceAnalyzeRoute
   "/app/": typeof AppIndexRoute
   "/app/item/$itemId": typeof AppItemItemIdRoute
+  "/view/$encoded/$filename": typeof ViewEncodedFilenameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -154,12 +172,14 @@ export interface FileRouteTypes {
     | "/privacy"
     | "/terms"
     | "/usage"
+    | "/fastlink"
     | "/healthz"
     | "/robots.txt"
     | "/app/compare"
     | "/resource/analyze"
     | "/app/"
     | "/app/item/$itemId"
+    | "/view/$encoded/$filename"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
@@ -169,12 +189,14 @@ export interface FileRouteTypes {
     | "/privacy"
     | "/terms"
     | "/usage"
+    | "/fastlink"
     | "/healthz"
     | "/robots.txt"
     | "/app/compare"
     | "/resource/analyze"
     | "/app"
     | "/app/item/$itemId"
+    | "/view/$encoded/$filename"
   id:
     | "__root__"
     | "/"
@@ -185,12 +207,14 @@ export interface FileRouteTypes {
     | "/privacy"
     | "/terms"
     | "/usage"
+    | "/fastlink"
     | "/healthz"
     | "/robots.txt"
     | "/app/compare"
     | "/resource/analyze"
     | "/app/"
     | "/app/item/$itemId"
+    | "/view/$encoded/$filename"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -202,9 +226,11 @@ export interface RootRouteChildren {
   PrivacyRouteRoute: typeof PrivacyRouteRoute
   TermsRouteRoute: typeof TermsRouteRoute
   UsageRouteRoute: typeof UsageRouteRoute
+  FastlinkRoute: typeof FastlinkRoute
   HealthzRoute: typeof HealthzRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   ResourceAnalyzeRoute: typeof ResourceAnalyzeRoute
+  ViewEncodedFilenameRoute: typeof ViewEncodedFilenameRoute
 }
 
 declare module "@tanstack/react-router" {
@@ -228,6 +254,13 @@ declare module "@tanstack/react-router" {
       path: "/cookies"
       fullPath: "/cookies"
       preLoaderRoute: typeof CookiesRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/fastlink": {
+      id: "/fastlink"
+      path: "/fastlink"
+      fullPath: "/fastlink"
+      preLoaderRoute: typeof FastlinkRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/healthz": {
@@ -307,6 +340,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppItemItemIdRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    "/view/$encoded/$filename": {
+      id: "/view/$encoded/$filename"
+      path: "/view/$encoded/$filename"
+      fullPath: "/view/$encoded/$filename"
+      preLoaderRoute: typeof ViewEncodedFilenameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -335,9 +375,11 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRouteRoute: PrivacyRouteRoute,
   TermsRouteRoute: TermsRouteRoute,
   UsageRouteRoute: UsageRouteRoute,
+  FastlinkRoute: FastlinkRoute,
   HealthzRoute: HealthzRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   ResourceAnalyzeRoute: ResourceAnalyzeRoute,
+  ViewEncodedFilenameRoute: ViewEncodedFilenameRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
