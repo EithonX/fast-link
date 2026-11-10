@@ -7,7 +7,7 @@ permissions:
   contents: write
 jobs:
   sync:
-    if: github.event.head_commit.message == 'ci: retry pinned MediaPeek upstream staging without workflow write permission'
+    if: "contains(github.event.head_commit.message, 'retry staged upstream')"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
