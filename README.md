@@ -1,80 +1,67 @@
-# MediaPeek
+# FastLink
 
-![MediaPeek app icon](resources/app_icons/MediaPeek-Dark-Default-1024x1024@1x.png)
+**FastLink** is a Cloudflare-based media utility for public HTTP(S) URLs. It combines direct, resumable file links with a detailed MediaInfo analyzer.
 
-MediaPeek provides detailed technical metadata for video, audio, image, and subtitle files directly in the browser. It fetches only the data segments needed for analysis, without downloading the full file first.
-
-![MediaPeek Demo](resources/preview.png)
-
-## Docs
-
-- [Contributing and development](CONTRIBUTING.md)
-- [Analyzer API and configuration](apps/mediapeek-analyzer/README.md)
+The modern application is built on [MediaPeek](https://github.com/DG02002/mediapeek), at upstream commit [621a315](https://github.com/DG02002/mediapeek/commit/621a315e79298d14223782b4d9dd1f8c9803034d), with FastLink's original download features migrated into the newer architecture.
 
 ## Features
 
-| Capability                   | What it gives you                                                                                                            |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Range-based analysis**     | Reads only the parts of a remote file that MediaInfo needs instead of downloading the full asset first.                      |
-| **Archive-aware inspection** | Opens supported media inside `.zip` and `.tar` archives and keeps both archive and inner filenames visible.                  |
-| **Flexible sources**         | Works with direct HTTP/HTTPS media URLs and supported public sources such as Google Drive files and folders.                 |
-| **URL analysis**             | Analyze one public media URL at a time, with progress, retry, and cancellation on its report page.                           |
-| **On-device reports**        | Saves reports in your browser so you can reopen or delete them. Reports leave the device only when you export or share them. |
-| **Report comparison**        | Compares two saved reports as a git-style line diff of the JSON or Text output.                                              |
-| **Multiple output formats**  | Exports metadata as Object, JSON, Text, HTML, or XML for inspection, sharing, or reuse.                                      |
-| **PNG export**               | Captures a report as a styled image in light or dark theme.                                                                  |
-| **Secure result sharing**    | Shares reports through end-to-end encrypted PrivateBin links.                                                                |
-| **Safer fetch pipeline**     | Blocks local and private network targets to reduce SSRF risk.                                                                |
-| **Optional Turnstile**       | Cloudflare Turnstile gating is available for the analyze endpoint but is disabled by default.                                |
+- **Fast links:** Generate shareable Cloudflare Worker URLs for public files at \`/fastlink\`. The \`/p/<encoded-url>/<filename>\` format is retained for existing links.
+- **Resumable downloads:** Forward HTTP \`Range\` requests and preserve the origin's real HTTP status. If an origin ignores ranges, FastLink does not pretend that it supports them.
+- **Media previews:** Preview compatible video, audio, images, and PDFs through \`/view/<encoded-url>/<filename>\`.
+- **Deep media analysis:** Inspect codecs, bitrates, tracks, archive contents and more using the upstream two-Worker MediaPeek analyzer at \`/app\`.
+- **Browser history:** Recent generated links use the original \`fastlink_history\` browser-storage key so existing history survives the migration.
+- **Metadata endpoint:** \`GET /info?url=...\` probes remote metadata with HEAD and a bounded range fallback.
+- **Legacy proxy endpoint:** \`/resources/proxy?url=...\` remains available for compatible clients.
+- **Optional Telegram bot:** Configure both \`BOT_TOKEN\` and \`TELEGRAM_WEBHOOK_SECRET\` as Worker secrets. The webhook is disabled without both secrets.
 
-## Try It
+FastLink supports ordinary publicly accessible media. Access restrictions, permissions and origin rate limits still apply. The project does not guarantee increased speed; performance depends on the origin, network and Cloudflare limits.
 
-> [!TIP]
-> Direct links below can be pasted into MediaPeek as-is. Webpage links are useful sample sources, but they usually require opening the page first and copying a media file URL.
+## Architecture
 
-### Direct Media Links
+The new application uses the upstream **pnpm workspace**, **TanStack Start**, **React**, **TypeScript**, **Effect**, **Vite**, and two **Cloudflare Workers**.
 
-Sintel Trailer
+| Component | Location | Default Worker name |
+| --- | --- | --- |
+| Web app, FastLink routes and report UI | \`apps/mediapeek\` | \`dl\` |
+| MediaInfo analyzer and safe ranged fetching | \`apps/mediapeek-analyzer\` | \`fastlink-analyzer\` |
+| Shared contracts and URL codec | \`packages/shared\` | — |
 
-```text
-https://media.w3.org/2010/05/sintel/trailer.mp4
-```
+The web Worker uses the \`ANALYZER\` service binding to call the analyzer. The separate analyzer must exist before deploying the web Worker. Internal upstream workspace/package names remain unchanged to minimize migration risk.
 
-ForBiggerBlazes Clip
+## Develop and verify
 
-```text
-https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4
-```
+Use Node.js **26.12.0** and pnpm **12.5.1**:
 
-### Webpage Links
+\`\`\`bash
+pnpm install --frozen-lockfile
+pnpm check
+pnpm test
+pnpm build
+\`\`\`
 
-- [HEVC Videos](https://lf-tk-sg.ibytedtos.com/obj/tcs-client-sg/resources/video_demo_hevc.html)
-- [MPEG-H Audio](https://mpegh.com/academy/testing-and-qa/)
-- [Dolby AC-4 Online Delivery Kit](https://ott.dolby.com/OnDelKits/AC-4/Dolby_AC-4_Online_Delivery_Kit_1.5/help_files/topics/kit_wrapper_MP4_multiplexed_streams.html)
-- [PeterPee Atmos](https://www.peterpee.com/demo)
-- [Kodi Samples](https://kodi.wiki/view/Samples)
-- [Netflix Open Content](https://opencontent.netflix.com/)
-- [Jellyfin Test Videos](https://repo.jellyfin.org/test-videos/)
-- [4K-8K Dolby Vision Samples by Salty01](https://drive.google.com/drive/folders/1yAq-jgsb8pYa92PnGZkxyEV0E3VVkhiC)
-- [Surround Sound by Buzz*Buzz_Buzz*](https://drive.google.com/drive/folders/1JxmeedtAtgmoafXv9rroiDOS2vEX7N4b)
-- [Dolby Vision, Atmos, DTS-X Demos](https://1drv.ms/f/c/999a020cf5718098/EobEBJqZ92ZFipImX5WugTUB7xX5r5ko-omYcTJQ9chLPA)
+Run both development Workers with:
 
-## Known Issues
+\`\`\`bash
+pnpm dev
+\`\`\`
 
-- [x] **Archive bitrate accuracy**. Fixed in [d782473](https://github.com/DG02002/mediapeek/commit/d7824738b9f94b963b0370f7faa4733d771ce767). MediaPeek now corrects file size and bitrate for archive-backed media when the inner entry size can be verified from archive metadata. If the inner size cannot be verified reliably, the UI marks the result as archive-estimated and shows an info tooltip.
+Builds and deployments use the checked-in lockfile. Repository CI performs checks, tests, both builds and dry-run Worker deployments. CI **does not publish** on every push.
 
-- [x] **MediaInfo seek reads over lazy HTTP range fetches**. Fixed in [5fa672a](https://github.com/DG02002/mediapeek/commit/5fa672aaab37b5a847183416b5e5083347387209) with a patch shared by `@cjee21` during discussion of a similar MediaInfo macOS build bug in [MediaInfoLib #2555](https://github.com/MediaArea/MediaInfoLib/issues/2555).
+## Production configuration
 
-## License
+The web Worker is configured in \`apps/mediapeek/wrangler.jsonc\`. The analyzer Worker is configured in \`apps/mediapeek-analyzer/wrangler.jsonc\`.
 
-**MediaPeek** is released under the GNU GPLv3.
+Before publishing a release, verify the intended Cloudflare account, service binding, production rate limiting and custom-domain routing. The new two-Worker deployment is not interchangeable with the older single-Worker build. Deploy the analyzer first and the web Worker second. Keep tokens and application secrets in your Cloudflare configuration, not in Git.
 
-### Acknowledgments
+The upstream deployment and rate-limiting checks live in \`scripts/deployment-preflight.mjs\`. See [the upstream analyzer guide](apps/mediapeek-analyzer/README.md) for analyzer configuration.
 
-- **MediaInfo**: Copyright © 2002–2023 MediaArea.net SARL. Analysis is powered by [mediainfo.js](https://github.com/buzz/mediainfo.js), a WebAssembly port of [MediaInfoLib](https://github.com/MediaArea/MediaInfoLib). ([License](https://mediaarea.net/en/MediaInfo/License))
+**Privacy:** Generated links contain a reversible encoding of the original URL, not encryption. Avoid sharing private or credential-bearing URLs. Link history is stored in the browser.
 
-- **PrivateBin**: Enables secure sharing of results. ([License](https://github.com/PrivateBin/PrivateBin/blob/master/LICENSE.md))
+## Credits and license
 
-- **Apple Services Badges**: Video badge assets, including SD, HD, 4K, HDR, HDR10+, Dolby, Immersive, and 3D, are sourced from [Apple TV](https://tv.apple.com/), while audio badge assets (Lossless, Hi-Res Lossless, Apple Digital Master, Spatial Audio, AAC) are sourced from [Apple Music](https://music.apple.com/). Special thanks to @SuperSaltyGamer for providing the Apple Music SVG badges. These designs were selected for their visual clarity and strong fit with MediaPeek's interface.
+FastLink is maintained by [EithonX](https://github.com/EithonX). Its media analysis implementation builds upon [MediaPeek](https://github.com/DG02002/mediapeek), including ongoing improvements to MediaInfo handling, range fetching, archive analysis, UX and security. The original project and its contributors retain their respective credits and rights.
 
-- **Cloudflare Workers**: Hosted on [Cloudflare Workers](https://workers.cloudflare.com/). MediaPeek benefits from their generous free tier.
+MediaInfo analysis is powered by [mediainfo.js](https://github.com/buzz/mediainfo.js) and [MediaInfoLib](https://github.com/MediaArea/MediaInfoLib).
+
+Licensed under [GNU GPL-3.0](LICENSE).
