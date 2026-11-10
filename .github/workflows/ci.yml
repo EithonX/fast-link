@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, migration/mediapeek-modern-stack]
+    branches: [main]
   pull_request:
     branches: [main]
 
