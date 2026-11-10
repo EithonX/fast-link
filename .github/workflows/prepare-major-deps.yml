@@ -22,7 +22,7 @@ jobs:
       - name: Resolve major compiler linter and animation upgrades from npm
         run: |
           set -euo pipefail
-          # Re-resolve ESLint's peer tree from scratch instead of retaining the incompatible v9 lock entries.
+          # Re-resolve peers with the compatible maintained React lint package.
           rm package-lock.json
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm ci --ignore-scripts --no-audit --no-fund
