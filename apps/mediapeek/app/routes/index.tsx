@@ -23,6 +23,12 @@ import { cn } from "~/lib/utils"
 
 const capabilities = [
   {
+    id: "fast-links",
+    title: "Direct Fast Links",
+    description: "Turn public HTTP(S) media URLs into shareable edge links with range-aware streaming and browser-based history.",
+    specs: ["Cloudflare streaming proxy", "Resumable range requests", "Copy, preview, download", "No account required"],
+  },
+  {
     id: "partial-fetching",
     title: "Partial Fetching",
     description:
@@ -104,6 +110,7 @@ const METADATA_ENGINE = {
 type CapabilityId = (typeof capabilities)[number]["id"]
 
 const capabilityIcons = {
+  "fast-links": FlashIcon,
   "partial-fetching": FlashIcon,
   "archive-support": FileZipIcon,
   "multiple-exports": KeyframesMultipleIcon,
@@ -114,7 +121,7 @@ function HomePage() {
   const previewEmbed = (
     <iframe
       src="/preview"
-      title="MediaPeek Preview"
+      title="FastLink media analysis preview"
       className="h-230 w-full bg-transparent"
       loading="lazy"
       sandbox="allow-scripts"
@@ -127,31 +134,29 @@ function HomePage() {
       <main className="flex-1">
         <section className="from-muted/35 to-background bg-linear-to-b">
           <div className="flex w-full flex-col items-center px-6 py-16 text-center md:px-8 md:py-24 lg:px-10 xl:px-14">
-            <div className="relative h-28 w-28 sm:h-32 sm:w-32">
-              <img
-                src="/badges/icon-light.webp"
-                alt="MediaPeek Logo"
-                className="hidden h-full w-full object-contain dark:block"
-              />
-              <img
-                src="/badges/icon-dark.webp"
-                alt="MediaPeek Logo"
-                className="h-full w-full object-contain dark:hidden"
-              />
+            <div className="bg-primary text-primary-foreground flex h-24 w-24 items-center justify-center rounded-3xl shadow-sm sm:h-28 sm:w-28">
+              <Icon icon={FlashIcon} size={55} />
             </div>
             <h1 className="mt-6 text-5xl font-normal tracking-tight text-balance md:text-7xl lg:text-[5.5rem] lg:leading-[0.95]">
-              MediaPeek
+              FastLink
             </h1>
             <p className="text-muted-foreground mt-5 max-w-3xl text-lg leading-relaxed sm:text-xl">
-              Inspect media metadata from a URL in a clear, reliable interface.
+              Generate direct links and inspect media details in one fast, reliable workspace.
             </p>
             <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
               <Link
-                to="/app"
+                to="/fastlink"
                 viewTransition
                 className={cn(buttonVariants({ size: "lg" }), "min-w-40")}
               >
-                Open App
+                Generate Fast Link
+              </Link>
+              <Link
+                to="/app"
+                viewTransition
+                className={cn(buttonVariants({ size: "lg", variant: "outline" }), "min-w-40")}
+              >
+                Analyze Media
               </Link>
             </div>
           </div>
@@ -171,7 +176,7 @@ function HomePage() {
               What it does
             </h2>
             <p className="text-muted-foreground mt-3 max-w-xl text-base leading-relaxed sm:text-lg">
-              Four things MediaPeek handles, from fetch to share.
+              Fast links and deep analysis, built on a dependable media engine.
             </p>
           </div>
 
@@ -277,7 +282,7 @@ function HomePage() {
                     Metadata engine
                   </h2>
                   <p className="text-muted-foreground max-w-3xl text-base leading-relaxed sm:text-lg">
-                    MediaPeek uses mediainfo.js for metadata analysis. It runs
+                    FastLink uses mediainfo.js for metadata analysis. It runs
                     in WebAssembly and is based on MediaInfoLib.
                   </p>
                 </div>
@@ -335,14 +340,14 @@ function HomePage() {
                     Built in public, maintained on GitHub.
                   </h2>
                   <p className="text-muted-foreground max-w-2xl text-base leading-relaxed sm:text-lg">
-                    MediaPeek is open source. Browse the repository on GitHub,
+                    FastLink is open source and builds on MediaPeek. Browse the repository,
                     review issues, track releases, and follow development.
                   </p>
                 </div>
 
                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                   <a
-                    href="https://github.com/DG02002/mediapeek"
+                    href="https://github.com/EithonX/fast-link"
                     target="_blank"
                     rel="noreferrer"
                     className={cn(
@@ -367,7 +372,7 @@ function HomePage() {
                 </h2>
                 <p className="text-muted-foreground max-w-3xl text-base leading-relaxed sm:text-lg">
                   Third-party marks remain the property of their respective
-                  owners. MediaPeek references them for identification only.
+                  owners. FastLink references them for identification only.
                 </p>
               </div>
 
@@ -390,11 +395,11 @@ function HomePage() {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Home - MediaPeek" },
+      { title: "Home - FastLink" },
       {
         name: "description",
         content:
-          "Inspect media metadata from a URL in a clear, reliable interface.",
+          "Generate direct Fast Links and analyze media files with a modern edge workspace.",
       },
     ],
   }),
