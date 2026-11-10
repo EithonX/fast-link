@@ -297,6 +297,10 @@ export function FastLinkForm() {
       triggerSuccess();
       setTimeout(() => setCopied(false), 2000);
     } catch {
+      setState((state) => ({
+        ...state,
+        error: 'Clipboard access was denied. Select and copy the link manually.',
+      }));
       triggerError();
     }
   };
@@ -304,24 +308,20 @@ export function FastLinkForm() {
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      if (text) {
-        setInputUrl(text);
-        if (inputRef.current) inputRef.current.value = text;
+      if (text.trim()) {
+        setInputUrl(text.trim());
+        setState((state) => ({ ...state, error: null }));
+        inputRef.current?.focus();
         triggerSuccess();
+      } else {
+        setState((state) => ({ ...state, error: 'Clipboard is empty.' }));
       }
     } catch {
+      setState((state) => ({
+        ...state,
+        error: 'Clipboard permission was denied. Paste the link manually.',
+      }));
       triggerError();
-    }
-  };
-
-  const checkClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text && text.startsWith('http') && text !== state.url) {
-        setClipboardUrl(text);
-      }
-    } catch {
-      // Clipboard access denied
     }
   };
 
@@ -378,6 +378,12 @@ export function FastLinkForm() {
   const mediaSummary = getMediaSummary();
 
   const handleRestore = (item: HistoryItem) => {
+    stopPreviousOperation();
+    const operationId = ++nextOperationId.current;
+    const metadata = new AbortController();
+    const analysis = new AbortController();
+    currentOperation.current = { id: operationId, metadata, analysis };
+
     setState({
       ...initialState,
       url: item.url,
@@ -385,20 +391,14 @@ export function FastLinkForm() {
       fileInfo: {
         filename: item.filename,
         size: item.sizeBytes || 0,
-        type: 'unknown',
+        type: '',
       },
-      isGenerating: false,
-      isAnalyzing: true, // Re-trigger analysis
-      mediaResults: null,
+      isAnalyzing: true,
     });
-
-    if (inputRef.current) {
-      inputRef.current.value = item.url;
-    }
     setInputUrl(item.url);
-
+    setCopied(false);
     triggerSuccess();
-    fetchMediaInfo(item.url);
+    void fetchMediaInfo(item.url, operationId, analysis.signal);
   };
 
   return (
