@@ -22,10 +22,9 @@ jobs:
       - name: Resolve major compiler linter and animation upgrades from npm
         run: |
           set -euo pipefail
-          npm install --save-dev --package-lock-only --ignore-scripts --no-audit --no-fund eslint@latest @eslint/js@latest typescript@latest
-          npm install --save --package-lock-only --ignore-scripts --no-audit --no-fund motion@latest
-          npm ls --package-lock-only eslint @eslint/js typescript motion || true
-          npm install --ignore-scripts --no-audit --no-fund
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ls eslint @eslint/js typescript motion
           npm run lint
           npm run typecheck
           npx vitest run
