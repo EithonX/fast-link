@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 
 import type { MediaTrackJSON } from '~/types/media';
 
@@ -28,7 +28,7 @@ export function GeneralSection({ generalTrack }: GeneralSectionProps) {
           role="status"
           className="flex items-start gap-3 rounded-lg border border-amber-300/60 bg-amber-50/60 p-4 text-sm text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/20 dark:text-amber-100"
         >
-          <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          <TriangleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="space-y-1">
             <p className="font-semibold">Archive metadata is estimated</p>
             <p className="opacity-85">{archiveWarning}</p>
