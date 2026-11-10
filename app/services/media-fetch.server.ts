@@ -8,13 +8,13 @@ import {
   type FilenameSource,
   parseContentDispositionFilename,
 } from '~/lib/filename-resolution';
+import { safeMediaFetch } from '~/lib/safe-media-fetch.server';
 import {
   getEmulationHeaders,
   isArchiveExtension,
   resolveGoogleDriveUrl,
   validateUrl,
 } from '~/lib/server-utils';
-import { safeMediaFetch } from '~/lib/safe-media-fetch.server';
 import { fastLinkEmitter } from '~/services/event-bus.server';
 
 export interface FetchDiagnostics {
