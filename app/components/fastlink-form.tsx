@@ -17,8 +17,8 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { useMemo, useRef, useState } from 'react';
+import { motion } from 'motion/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { HistorySheet } from '~/components/history-sheet';
 import { MediaView } from '~/components/media-view';
@@ -34,6 +34,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { useHapticFeedback } from '~/hooks/use-haptic';
 import { type HistoryItem, useHistory } from '~/hooks/use-history';
+import { createFastLink, normalizeDirectUrl, suggestFilename } from '~/lib/fastlink-url';
 import { cn } from '~/lib/utils';
 
 import { ModeToggle } from './mode-toggle';
@@ -49,8 +50,10 @@ interface FastLinkState {
   fastLink: string;
   mediaResults: Record<string, string> | null;
   error: string | null;
-  isGenerating: boolean;
+  isCheckingInfo: boolean;
   isAnalyzing: boolean;
+  analysisError: string | null;
+  metadataMessage: string | null;
   url: string;
 }
 
@@ -59,8 +62,10 @@ const initialState: FastLinkState = {
   fastLink: '',
   mediaResults: null,
   error: null,
-  isGenerating: false,
+  isCheckingInfo: false,
   isAnalyzing: false,
+  analysisError: null,
+  metadataMessage: null,
   url: '',
 };
 
@@ -86,118 +91,203 @@ export function FastLinkForm() {
   const [inputUrl, setInputUrl] = useState('');
   const [state, setState] = useState<FastLinkState>(initialState);
   const [copied, setCopied] = useState(false);
-  const [clipboardUrl, setClipboardUrl] = useState<string | null>(null);
   const { addToHistory } = useHistory();
 
   const isValidUrl = useMemo(() => {
     if (!inputUrl) return false;
     try {
-      const u = new URL(inputUrl);
-      return u.protocol === 'http:' || u.protocol === 'https:';
+      return Boolean(normalizeDirectUrl(inputUrl));
     } catch {
       return false;
     }
   }, [inputUrl]);
 
-  const handleSubmit = async (urlToAnalyze?: string) => {
-    const url = urlToAnalyze || inputUrl.trim() || '';
+  const currentOperation = useRef<{
+    id: number;
+    metadata: AbortController;
+    analysis: AbortController;
+  } | null>(null);
+  const nextOperationId = useRef(0);
 
-    if (!url) {
-      setState((s) => ({ ...s, error: 'Please enter a valid URL' }));
-      return;
-    }
+  useEffect(() => {
+    return () => {
+      currentOperation.current?.metadata.abort();
+      currentOperation.current?.analysis.abort();
+    };
+  }, []);
 
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      setState((s) => ({
-        ...s,
-        error: 'URL must start with http:// or https://',
-      }));
-      return;
-    }
+  const stopPreviousOperation = () => {
+    currentOperation.current?.metadata.abort();
+    currentOperation.current?.analysis.abort();
+    currentOperation.current = null;
+    nextOperationId.current += 1;
+  };
 
-    setClipboardUrl(null);
-
-    setState({
-      fileInfo: null,
-      fastLink: '',
-      mediaResults: null,
-      error: null,
-      isGenerating: true,
-      isAnalyzing: false,
-      url,
-    });
-
+  const fetchFileInfo = async (
+    url: string,
+    operationId: number,
+    signal: AbortSignal,
+  ) => {
     try {
-      const infoResponse = await fetch(`/info?url=${encodeURIComponent(url)}`);
-      const infoData = (await infoResponse.json()) as FileInfo & {
+      const response = await fetch('/info?url=' + encodeURIComponent(url), {
+        signal,
+      });
+      const info = (await response.json()) as Partial<FileInfo> & {
         error?: string;
       };
-
-      if (!infoResponse.ok || infoData.error) {
-        throw new Error(infoData.error || 'Failed to fetch file info');
+      if (!response.ok || info.error) {
+        throw new Error('File metadata unavailable.');
       }
+      if (currentOperation.current?.id !== operationId) return;
 
-      const encodedUrl = btoa(url);
-      const fastLink =
-        window.location.origin +
-        '/p/' +
-        encodeURIComponent(encodedUrl) +
-        '/' +
-        encodeURIComponent(infoData.filename);
+      const filename =
+        typeof info.filename === 'string' && info.filename.trim()
+          ? info.filename
+          : suggestFilename(url);
+      const size =
+        typeof info.size === 'number' && Number.isFinite(info.size) && info.size > 0
+          ? info.size
+          : 0;
+      const type = typeof info.type === 'string' ? info.type : '';
+      const fastLink = createFastLink(window.location.origin, url, filename);
 
-      setState((s) => ({
-        ...s,
-        fileInfo: {
-          filename: infoData.filename,
-          size: infoData.size,
-          type: infoData.type,
-        },
+      setState((state) => ({
+        ...state,
+        fileInfo: { filename, size, type },
         fastLink,
-        isGenerating: false,
-        isAnalyzing: true,
+        isCheckingInfo: false,
+        metadataMessage: null,
       }));
-
       addToHistory({
-        url: url,
-        fastLink: fastLink,
-        filename: infoData.filename,
-        fileSize: formatFileSize(infoData.size),
-        sizeBytes: infoData.size,
+        url,
+        fastLink,
+        filename,
+        fileSize: formatFileSize(size),
+        sizeBytes: size,
       });
-
-      triggerSuccess();
-      fetchMediaInfo(url);
-    } catch (err) {
-      setState((s) => ({
-        ...s,
-        isGenerating: false,
-        isAnalyzing: false,
-        error: err instanceof Error ? err.message : 'Failed to generate link',
+    } catch {
+      if (signal.aborted || currentOperation.current?.id !== operationId) return;
+      setState((state) => ({
+        ...state,
+        isCheckingInfo: false,
+        metadataMessage:
+          'File details could not be verified. The link is ready, but the source may refuse downloads.',
       }));
-      triggerError();
     }
   };
 
-  const fetchMediaInfo = async (url: string) => {
+  const fetchMediaInfo = async (
+    url: string,
+    operationId: number,
+    signal: AbortSignal,
+  ) => {
     try {
-      const analyzeResponse = await fetch(
-        `/resource/analyze?url=${encodeURIComponent(url)}&format=object`,
+      const response = await fetch(
+        '/resource/analyze?url=' + encodeURIComponent(url) + '&format=object',
+        { signal },
       );
-      if (analyzeResponse.ok) {
-        const analyzeData = (await analyzeResponse.json()) as {
-          results?: Record<string, string>;
-        };
-        setState((s) => ({
-          ...s,
-          mediaResults: analyzeData.results || null,
-          isAnalyzing: false,
-        }));
-      } else {
-        setState((s) => ({ ...s, isAnalyzing: false }));
+      if (!response.ok) {
+        throw new Error('Media analysis is unavailable. Your download link is still ready.');
       }
-    } catch {
-      setState((s) => ({ ...s, isAnalyzing: false }));
+
+      const data = (await response.json()) as {
+        results?: Record<string, string>;
+      };
+      if (!data.results?.json) {
+        throw new Error('No media details were returned. The download link is still ready.');
+      }
+      if (currentOperation.current?.id !== operationId) return;
+
+      setState((state) => ({
+        ...state,
+        mediaResults: data.results || null,
+        isAnalyzing: false,
+        analysisError: null,
+      }));
+    } catch (error) {
+      if (signal.aborted || currentOperation.current?.id !== operationId) return;
+      setState((state) => ({
+        ...state,
+        isAnalyzing: false,
+        analysisError:
+          error instanceof Error
+            ? error.message
+            : 'Media analysis is unavailable. The download link is still ready.',
+      }));
     }
+  };
+
+  const handleSubmit = (requestedUrl?: string) => {
+    let url: string;
+    try {
+      url = normalizeDirectUrl(requestedUrl || inputUrl);
+    } catch {
+      setState((state) => ({
+        ...state,
+        error: 'Enter a valid HTTP or HTTPS link without embedded credentials.',
+      }));
+      triggerError();
+      return;
+    }
+
+    stopPreviousOperation();
+    const operationId = ++nextOperationId.current;
+    const metadata = new AbortController();
+    const analysis = new AbortController();
+    currentOperation.current = { id: operationId, metadata, analysis };
+
+    const filename = suggestFilename(url);
+    const fastLink = createFastLink(window.location.origin, url, filename);
+
+    setInputUrl(url);
+    setCopied(false);
+    setState({
+      fileInfo: { filename, size: 0, type: '' },
+      fastLink,
+      mediaResults: null,
+      error: null,
+      isCheckingInfo: true,
+      isAnalyzing: true,
+      analysisError: null,
+      metadataMessage: null,
+      url,
+    });
+    addToHistory({
+      url,
+      fastLink,
+      filename,
+      fileSize: formatFileSize(0),
+      sizeBytes: 0,
+    });
+    triggerSuccess();
+
+    // Link generation never waits for the source or the media analyzer.
+    void fetchFileInfo(url, operationId, metadata.signal);
+    void fetchMediaInfo(url, operationId, analysis.signal);
+  };
+
+  const cancelAnalysis = () => {
+    currentOperation.current?.analysis.abort();
+    setState((state) => ({
+      ...state,
+      isAnalyzing: false,
+      analysisError: 'Analysis cancelled. Your download link is still ready.',
+    }));
+  };
+
+  const retryAnalysis = () => {
+    const operation = currentOperation.current;
+    if (!operation || !state.url || state.isAnalyzing) return;
+
+    operation.analysis.abort();
+    const analysis = new AbortController();
+    operation.analysis = analysis;
+    setState((state) => ({
+      ...state,
+      isAnalyzing: true,
+      analysisError: null,
+    }));
+    void fetchMediaInfo(state.url, operation.id, analysis.signal);
   };
 
   const copyToClipboard = async () => {
