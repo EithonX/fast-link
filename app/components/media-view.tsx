@@ -31,11 +31,11 @@ export function MediaView({ data, url }: MediaViewProps) {
     url: string;
     text: string;
   } | null>(null);
-  const [isFetchingText, setIsFetchingText] = useState(false);
   const [textError, setTextError] = useState<string | null>(null);
   const [retryTextVersion, setRetryTextVersion] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentLazyText = lazyText?.url === url ? lazyText.text : null;
+  const isFetchingText = isTextView && !data.text && currentLazyText === null && !textError;
 
   // Fetch text only on demand. Loading state is deliberately not a dependency:
   // toggling that state must not abort the request it just started.
@@ -45,7 +45,6 @@ export function MediaView({ data, url }: MediaViewProps) {
     }
 
     const controller = new AbortController();
-    setIsFetchingText(true);
 
     const fetchText = async () => {
       try {
@@ -72,10 +71,6 @@ export function MediaView({ data, url }: MediaViewProps) {
       } catch {
         if (!controller.signal.aborted) {
           setTextError('Unable to load the text report. Try again.');
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsFetchingText(false);
         }
       }
     };
