@@ -7,6 +7,7 @@ permissions:
   contents: write
 jobs:
   sync:
+    if: github.event.head_commit.message == 'ci: retry pinned MediaPeek upstream staging without workflow write permission'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -22,48 +23,18 @@ jobs:
           actual="$(git -C "$RUNNER_TEMP/mediapeek-upstream" rev-parse HEAD)"
           expected="621a315e79298d14223782b4d9dd1f8c9803034d"
           test "$actual" = "$expected" || { echo "::error::Upstream changed; review the new revision"; exit 1; }
-      - name: Stage upstream source without its repository automation
+      - name: Stage upstream source, preserving GitHub workflow files
         run: |
           set -euo pipefail
-          git rm -r --quiet .
-          rsync -a --exclude .git "$RUNNER_TEMP/mediapeek-upstream/" ./
-          rm -rf .github/workflows
-          mkdir -p .github/workflows
-          cat > .github/workflows/ci.yml <<'YAML'
-          name: CI
-          on:
-            push:
-              branches: [main, migration/mediapeek-modern-stack]
-            pull_request:
-              branches: [main]
-          permissions:
-            contents: read
-          jobs:
-            validate:
-              runs-on: ubuntu-latest
-              timeout-minutes: 30
-              env:
-                NODE_OPTIONS: --no-experimental-webstorage
-                HUSKY: 0
-              steps:
-                - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-                  with:
-                    persist-credentials: false
-                - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-                  with:
-                    node-version: 26.12.0
-                    package-manager-cache: false
-                - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-                  with:
-                    version: 12.5.1
-                    run_install: false
-                - run: pnpm install --frozen-lockfile
-                - run: pnpm check
-                - run: pnpm test
-                - run: pnpm build
-          YAML
-          git add -A
+          git ls-files -z | while IFS= read -r -d '' path; do
+            case "$path" in
+              .github/*) ;;
+              *) git rm --quiet -- "$path" ;;
+            esac
+          done
+          rsync -a --exclude .git --exclude .github "$RUNNER_TEMP/mediapeek-upstream/" ./
+          git add -A -- . ':!.github'
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: stage MediaPeek 621a315 source and isolated FastLink CI"
+          git commit -m "chore: stage MediaPeek 621a315 source for FastLink migration"
           git push origin HEAD:migration/mediapeek-modern-stack
