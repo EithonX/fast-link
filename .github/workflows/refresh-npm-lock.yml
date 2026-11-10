@@ -1,0 +1,59 @@
+name: Refresh compatible npm dependencies
+on:
+  push:
+    branches:
+      - maintenance/npm-compatible-refresh-2026-11
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: "github.event.head_commit.message == 'ci: perform one-time npm compatible dependency refresh'"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HUSKY: 0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: maintenance/npm-compatible-refresh-2026-11
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Refresh exact lockfile resolutions within existing semver ranges
+        run: |
+          set -euo pipefail
+          npm update --package-lock-only --ignore-scripts --no-fund --no-audit
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          import assert from "node:assert/strict";
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+          assert.deepEqual(lock.packages[""].dependencies, pkg.dependencies);
+          assert.deepEqual(lock.packages[""].devDependencies, pkg.devDependencies);
+          console.log("Refreshed", Object.keys(lock.packages).length, "resolved packages.");
+          NODE
+          git diff --stat package-lock.json
+          git diff --check
+      - name: Record installed vs latest dependency versions
+        run: |
+          npm outdated --json > "$RUNNER_TEMP/npm-outdated.json" || true
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          const outdated = JSON.parse(readFileSync(process.env.RUNNER_TEMP + "/npm-outdated.json", "utf8") || "{}");
+          for (const [name, v] of Object.entries(outdated)) {
+            console.log(name, "current:", v.current, "compatible:", v.wanted, "latest:", v.latest);
+          }
+          NODE
+      - name: Push only lockfile update
+        run: |
+          set -euo pipefail
+          git add -- package-lock.json
+          if git diff --cached --quiet; then echo "No compatible dependency updates"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(deps): refresh compatible npm dependency resolutions"
+          git push origin HEAD:maintenance/npm-compatible-refresh-2026-11
