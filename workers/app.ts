@@ -2,6 +2,8 @@ import { createRequestHandler, RouterContextProvider } from 'react-router';
 
 import { cloudflareContext } from '~/lib/cloudflare-context';
 import { handleFastLinkRoutes } from '~/lib/fastlink-handler';
+import { safeMediaFetch } from '~/lib/safe-media-fetch.server';
+import { validateUrl } from '~/lib/server-utils';
 
 const requestHandler = createRequestHandler(
   () => import('virtual:react-router/server-build'),
@@ -20,7 +22,7 @@ export default {
     // console.log("Incoming request:", url.pathname, url.searchParams.toString());
     if (
       url.pathname === '/resources/proxy' ||
-      url.pathname.startsWith('/resources/proxy')
+      url.pathname === '/resources/proxy/'
     ) {
       const targetUrl = url.searchParams.get('url');
 
@@ -39,6 +41,13 @@ export default {
         });
       }
 
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return new Response('Method not allowed', {
+          status: 405,
+          headers: corsHeaders,
+        });
+      }
+
       if (!targetUrl) {
         return new Response("Missing 'url' query parameter", {
           status: 400,
@@ -47,14 +56,7 @@ export default {
       }
 
       try {
-        const upstreamUrl = new URL(targetUrl);
-        // Basic validation
-        if (!['http:', 'https:'].includes(upstreamUrl.protocol)) {
-          return new Response('Invalid protocol', {
-            status: 400,
-            headers: corsHeaders,
-          });
-        }
+        validateUrl(targetUrl);
 
         const upstreamHeaders = new Headers();
 
@@ -87,7 +89,7 @@ export default {
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
         );
 
-        const upstreamResponse = await fetch(upstreamUrl.toString(), {
+        const upstreamResponse = await safeMediaFetch(targetUrl, {
           method: request.method,
           headers: upstreamHeaders,
           redirect: 'follow',
@@ -104,6 +106,9 @@ export default {
           'transfer-encoding',
           'connection',
           'keep-alive',
+          'set-cookie',
+          'set-cookie2',
+          'access-control-allow-credentials',
         ];
 
         for (const [key, value] of upstreamResponse.headers.entries()) {
