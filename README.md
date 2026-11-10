@@ -1,87 +1,80 @@
-<div align="center">
-  <br />
-  <h1 align="center">
-    FASTLINK
-  </h1>
-  <p align="center">
-    <strong>High-Speed Download Accelerator & Media Analyzer</strong>
-  </p>
-  <br />
-  <p align="center">
-    <a href="https://github.com/EithonX/fast-link/blob/main/LICENSE">
-      <img src="https://img.shields.io/badge/License-GPLv3-222222.svg?style=for-the-badge&labelColor=111111" alt="License">
-    </a>
-    <a href="https://workers.cloudflare.com/">
-      <img src="https://img.shields.io/badge/Cloudflare-F38020.svg?style=for-the-badge&logo=cloudflare&logoColor=white&labelColor=111111" alt="Cloudflare Workers">
-    </a>
-    <a href="https://reactrouter.com/">
-      <img src="https://img.shields.io/badge/React_Router-CA4245.svg?style=for-the-badge&logo=react-router&logoColor=white&labelColor=111111" alt="React Router">
-    </a>
-    <a href="https://www.typescriptlang.org/">
-      <img src="https://img.shields.io/badge/TypeScript-007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white&labelColor=111111" alt="TypeScript">
-    </a>
-  </p>
-  <br />
-</div>
+# MediaPeek
 
-<div align="center">
-  <i>Proxy direct links through Cloudflare's edge network for ultimate stability and speed.</i>
-</div>
+![MediaPeek app icon](resources/app_icons/MediaPeek-Dark-Default-1024x1024@1x.png)
 
----
+MediaPeek provides detailed technical metadata for video, audio, image, and subtitle files directly in the browser. It fetches only the data segments needed for analysis, without downloading the full file first.
 
-## Overview
+![MediaPeek Demo](resources/preview.png)
 
-FastLink is a tool I built to fix slow and unstable direct downloads. It uses Cloudflare's massive global network as a proxy, so your downloads go through their edge nodes instead of directly from the slow source.
+## Docs
 
-It also grabs detailed metadata from video and audio files instantly, right in the browser, without needing to download the whole file first.
+- [Contributing and development](CONTRIBUTING.md)
+- [Analyzer API and configuration](apps/mediapeek-analyzer/README.md)
 
-## What it does
+## Features
 
-| Feature | How it works |
-| :--- | :--- |
-| **Global Acceleration** | Routes traffic through Cloudflare Edge to bypass throttling and strict network limits. |
-| **Resume Support** | Keeps `Byte-Range` headers intact. Pausing and resuming your downloads actually works. |
-| **Deep Media Analysis** | Runs `mediainfo.js` via WebAssembly to grab things like Bitrate, Codec, and Resolution on the fly. |
-| **Edge Security** | Comes with SSRF mitigation, TLS fingerprinting, and dynamic browser emulation so links don't get blocked. |
+| Capability                   | What it gives you                                                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Range-based analysis**     | Reads only the parts of a remote file that MediaInfo needs instead of downloading the full asset first.                      |
+| **Archive-aware inspection** | Opens supported media inside `.zip` and `.tar` archives and keeps both archive and inner filenames visible.                  |
+| **Flexible sources**         | Works with direct HTTP/HTTPS media URLs and supported public sources such as Google Drive files and folders.                 |
+| **URL analysis**             | Analyze one public media URL at a time, with progress, retry, and cancellation on its report page.                           |
+| **On-device reports**        | Saves reports in your browser so you can reopen or delete them. Reports leave the device only when you export or share them. |
+| **Report comparison**        | Compares two saved reports as a git-style line diff of the JSON or Text output.                                              |
+| **Multiple output formats**  | Exports metadata as Object, JSON, Text, HTML, or XML for inspection, sharing, or reuse.                                      |
+| **PNG export**               | Captures a report as a styled image in light or dark theme.                                                                  |
+| **Secure result sharing**    | Shares reports through end-to-end encrypted PrivateBin links.                                                                |
+| **Safer fetch pipeline**     | Blocks local and private network targets to reduce SSRF risk.                                                                |
+| **Optional Turnstile**       | Cloudflare Turnstile gating is available for the analyze endpoint but is disabled by default.                                |
 
-<details>
-<summary><strong>View System Architecture</strong></summary>
-<br>
+## Try It
 
-Everything runs on the edge to keep latency as low as possible globally:
+> [!TIP]
+> Direct links below can be pasted into MediaPeek as-is. Webpage links are useful sample sources, but they usually require opening the page first and copying a media file URL.
 
-- **Compute**: Cloudflare Workers
-- **Framework**: React Router v7
-- **UI Component System**: shadcn/ui + Tailwind CSS
-- **Media Engine**: WebAssembly (WASM) 
+### Direct Media Links
 
-</details>
+Sintel Trailer
 
-## Quick Start
-
-```bash
-# 1. Get a direct link
-https://example.com/movie.mp4
-
-# 2. Drop it into FastLink
--> The UI validates it instantly on the client side
-
-# 3. Get your results
--> A proxied, high-speed download link
--> Extracted Codec & Container data
+```text
+https://media.w3.org/2010/05/sintel/trailer.mp4
 ```
 
-## Credits
+ForBiggerBlazes Clip
 
-Built on top of some awesome open-source projects.
+```text
+https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4
+```
 
-- **MediaInfo**: Analysis powered by [mediainfo.js](https://github.com/buzz/mediainfo.js) (MediaArea.net).
-- **Inspiration**: Heavily inspired by [MediaPeek](https://github.com/luminalreason/mediapeek/). Big thanks to [luminalreason](https://github.com/luminalreason) for the original concept.
-- **Maintained by**: [Eithon](https://github.com/EithonX).
+### Webpage Links
 
-<br />
+- [HEVC Videos](https://lf-tk-sg.ibytedtos.com/obj/tcs-client-sg/resources/video_demo_hevc.html)
+- [MPEG-H Audio](https://mpegh.com/academy/testing-and-qa/)
+- [Dolby AC-4 Online Delivery Kit](https://ott.dolby.com/OnDelKits/AC-4/Dolby_AC-4_Online_Delivery_Kit_1.5/help_files/topics/kit_wrapper_MP4_multiplexed_streams.html)
+- [PeterPee Atmos](https://www.peterpee.com/demo)
+- [Kodi Samples](https://kodi.wiki/view/Samples)
+- [Netflix Open Content](https://opencontent.netflix.com/)
+- [Jellyfin Test Videos](https://repo.jellyfin.org/test-videos/)
+- [4K-8K Dolby Vision Samples by Salty01](https://drive.google.com/drive/folders/1yAq-jgsb8pYa92PnGZkxyEV0E3VVkhiC)
+- [Surround Sound by Buzz*Buzz_Buzz*](https://drive.google.com/drive/folders/1JxmeedtAtgmoafXv9rroiDOS2vEX7N4b)
+- [Dolby Vision, Atmos, DTS-X Demos](https://1drv.ms/f/c/999a020cf5718098/EobEBJqZ92ZFipImX5WugTUB7xX5r5ko-omYcTJQ9chLPA)
 
-<div align="center">
-  Released under the <strong>GNU GPLv3 License</strong>
-</div>
+## Known Issues
+
+- [x] **Archive bitrate accuracy**. Fixed in [d782473](https://github.com/DG02002/mediapeek/commit/d7824738b9f94b963b0370f7faa4733d771ce767). MediaPeek now corrects file size and bitrate for archive-backed media when the inner entry size can be verified from archive metadata. If the inner size cannot be verified reliably, the UI marks the result as archive-estimated and shows an info tooltip.
+
+- [x] **MediaInfo seek reads over lazy HTTP range fetches**. Fixed in [5fa672a](https://github.com/DG02002/mediapeek/commit/5fa672aaab37b5a847183416b5e5083347387209) with a patch shared by `@cjee21` during discussion of a similar MediaInfo macOS build bug in [MediaInfoLib #2555](https://github.com/MediaArea/MediaInfoLib/issues/2555).
+
+## License
+
+**MediaPeek** is released under the GNU GPLv3.
+
+### Acknowledgments
+
+- **MediaInfo**: Copyright © 2002–2023 MediaArea.net SARL. Analysis is powered by [mediainfo.js](https://github.com/buzz/mediainfo.js), a WebAssembly port of [MediaInfoLib](https://github.com/MediaArea/MediaInfoLib). ([License](https://mediaarea.net/en/MediaInfo/License))
+
+- **PrivateBin**: Enables secure sharing of results. ([License](https://github.com/PrivateBin/PrivateBin/blob/master/LICENSE.md))
+
+- **Apple Services Badges**: Video badge assets, including SD, HD, 4K, HDR, HDR10+, Dolby, Immersive, and 3D, are sourced from [Apple TV](https://tv.apple.com/), while audio badge assets (Lossless, Hi-Res Lossless, Apple Digital Master, Spatial Audio, AAC) are sourced from [Apple Music](https://music.apple.com/). Special thanks to @SuperSaltyGamer for providing the Apple Music SVG badges. These designs were selected for their visual clarity and strong fit with MediaPeek's interface.
+
+- **Cloudflare Workers**: Hosted on [Cloudflare Workers](https://workers.cloudflare.com/). MediaPeek benefits from their generous free tier.

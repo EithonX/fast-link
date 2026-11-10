@@ -1,0 +1,63 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    :root {
+      --main-color: black;
+      --data-opacity: 0.8;
+      --lens-stop-end-opacity: 0.05;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --main-color: white;
+        --data-opacity: 0.6;
+        --lens-stop-end-opacity: 0.1;
+      }
+    }
+
+    .main-fill { fill: var(--main-color); }
+    .main-stroke { stroke: var(--main-color); }
+    .gradient-stop { stop-color: var(--main-color); }
+  </style>
+
+  <defs>
+    <linearGradient id="lensGradient" x1="200" y1="200" x2="800" y2="800" gradientUnits="userSpaceOnUse">
+      <stop offset="0" class="gradient-stop" stop-opacity="0.4"/>
+      <stop offset="1" class="gradient-stop" style="stop-opacity: var(--lens-stop-end-opacity)"/>
+    </linearGradient>
+
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="20" stdDeviation="25" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+
+    <clipPath id="lensClip">
+      <circle cx="680" cy="540" r="270"/>
+    </clipPath>
+  </defs>
+
+  <!-- Layer 2: Data Lines -->
+  <g style="opacity: var(--data-opacity)">
+    <!-- Line 1 -->
+    <rect x="162" y="250" width="700" height="80" rx="40" class="main-fill" />
+    <!-- Line 2 -->
+    <rect x="162" y="400" width="700" height="80" rx="40" class="main-fill" />
+    <!-- Line 3 -->
+    <rect x="162" y="550" width="500" height="80" rx="40" class="main-fill" />
+    <!-- Line 4 -->
+    <rect x="162" y="700" width="640" height="80" rx="40" class="main-fill" />
+  </g>
+
+  <!-- Layer 3: Lens -->
+  <g filter="url(#shadow)">
+    <!-- Lens Circle -->
+    <circle cx="680" cy="540" r="270" fill="url(#lensGradient)" class="main-stroke" stroke-width="20" stroke-opacity="0.8"/>
+
+    <!-- Zoomed Lines Inside Lens -->
+    <g clip-path="url(#lensClip)">
+      <!-- Line 2 Zoomed -->
+      <rect x="200" y="390" width="800" height="100" rx="50" class="main-fill" opacity="1.0"/>
+      <!-- Line 3 Zoomed -->
+      <rect x="200" y="540" width="600" height="100" rx="50" class="main-fill" opacity="1.0"/>
+      <!-- Line 4 Zoomed -->
+      <rect x="200" y="690" width="750" height="100" rx="50" class="main-fill" opacity="1.0"/>
+    </g>
+  </g>
+</svg>

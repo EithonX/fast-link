@@ -1,0 +1,12 @@
+{
+  "extends": "@mediapeek/config-typescript/base",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": ["src/**/*"]
+}

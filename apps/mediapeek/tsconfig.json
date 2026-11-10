@@ -1,0 +1,12 @@
+{
+  "extends": "@mediapeek/config-typescript/tanstack-start",
+  "compilerOptions": {
+    "types": ["node", "vite/client"],
+    "paths": {
+      "~/*": ["./app/*"],
+      "@mediapeek/shared/*": ["../../packages/shared/src/*"]
+    },
+    "rootDirs": ["."]
+  },
+  "include": ["app/**/*", "worker-configuration.d.ts", "env.d.ts"]
+}

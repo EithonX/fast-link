@@ -1,0 +1,76 @@
+import { createEvlogLoggerConfig } from "@mediapeek/shared/evlog"
+import { getRequestId } from "@mediapeek/shared/request-id"
+import { resolveRuntimeConfig } from "@mediapeek/shared/runtime-config"
+import { Schema } from "effect"
+import { createRequestLogger, initLogger, type AuditableLogger } from "evlog"
+import { withEvlog, type WorkerExecutionContext } from "evlog/workers"
+
+import { DEVTOOLS_WELL_KNOWN_PATH } from "~/constants"
+
+export interface RequestLoggerHandle {
+  readonly logger: AuditableLogger
+}
+
+initLogger(
+  createEvlogLoggerConfig("mediapeek", resolveRuntimeConfig(process.env))
+)
+
+// The analyze route emits richer diagnostics through finalizeAnalyzeRequest.
+const UNLOGGED_PATH_PATTERNS = [
+  "/resource/analyze",
+  "/healthz",
+  "/robots.txt",
+  DEVTOOLS_WELL_KNOWN_PATH,
+  "/_build/**",
+  "/badges/**",
+  "/brand/**",
+  "/wasm/**",
+  "/**.png",
+  "/**.ico",
+  "/**.svg",
+  "/**.webp",
+  "/**.wasm",
+  "/demo.json",
+  "/test-badges.html",
+]
+
+export const withRequestLogging = <TEnvironment>(
+  handler: (
+    request: Request,
+    environment: TEnvironment,
+    context: WorkerExecutionContext
+  ) => Response | Promise<Response>
+) => withEvlog(handler, { exclude: UNLOGGED_PATH_PATTERNS })
+
+export const getRequestLogger = (request: Request): RequestLoggerHandle => ({
+  logger: createRequestLogger({
+    method: request.method,
+    path: new URL(request.url).pathname,
+    requestId: getRequestId(request),
+  }),
+})
+
+export const getRequestIdFromLogger = (
+  request: Request,
+  logger: AuditableLogger
+) => {
+  const { requestId } = logger.getContext()
+
+  if (Schema.is(Schema.String)(requestId) && requestId.length > 0) {
+    return requestId
+  }
+
+  return getRequestId(request)
+}
+
+export const finishFallbackRequestLogger = (
+  handle: RequestLoggerHandle,
+  status: number,
+  error?: Error
+) => {
+  if (error) {
+    handle.logger.error(error)
+  }
+
+  handle.logger.emit({ status })
+}
