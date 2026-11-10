@@ -4,15 +4,9 @@ import { fileURLToPath } from "node:url"
 
 import { load } from "js-yaml"
 
-const yamlFilePaths = [
-  ...(await readdir(new URL("../.github/workflows/", import.meta.url)))
-    .filter(
-      (fileName) => fileName.endsWith(".yml") || fileName.endsWith(".yaml")
-    )
-    .map(
-      (fileName) => new URL(`../.github/workflows/${fileName}`, import.meta.url)
-    ),
-]
+const yamlFilePaths = (await readdir(new URL("../.github/workflows/", import.meta.url)))
+  .filter((fileName) => fileName.endsWith(".yml") || fileName.endsWith(".yaml"))
+  .map((fileName) => new URL(`../.github/workflows/${fileName}`, import.meta.url))
 
 const yamlContents = await Promise.all(
   yamlFilePaths.map((filePath) => readFile(filePath, "utf8"))
