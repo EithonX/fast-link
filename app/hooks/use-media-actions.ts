@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { safeClipboardWrite } from '../lib/clipboard';
+import { mediaReportFilename, mediaReportMimeType, type ReportFormat } from '../lib/report-export';
 import { uploadToPrivateBin } from '../lib/privatebin';
 import { useHapticFeedback } from './use-haptic';
 
@@ -111,5 +112,29 @@ export function useMediaActions({ data, url }: UseMediaActionsProps) {
     [fetchContent],
   );
 
-  return { handleCopy, getShareUrl, isSharing };
+  const downloadReport = useCallback(
+    async (format: ReportFormat, label: string, filename: string) => {
+      const content = await fetchContent(format, label);
+      if (!content) return;
+
+      const blob = new Blob([content], { type: mediaReportMimeType(format) });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = mediaReportFilename(filename, format);
+
+      try {
+        document.body.appendChild(anchor);
+        anchor.click();
+        triggerSuccess();
+        toast.success(label + ' report downloaded');
+      } finally {
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      }
+    },
+    [fetchContent, triggerSuccess],
+  );
+
+  return { handleCopy, getShareUrl, downloadReport, isSharing };
 }
