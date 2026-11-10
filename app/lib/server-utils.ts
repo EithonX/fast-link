@@ -37,13 +37,13 @@ export const validateUrl = (url: string) => {
   const parsedUrl = new URL(url)
 
   if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-    throw new ValidationFailureError(
+    throw new Error(
       'Invalid URL: Only HTTP and HTTPS sources are supported.'
     )
   }
 
   if (parsedUrl.username || parsedUrl.password) {
-    throw new ValidationFailureError(
+    throw new Error(
       'Invalid URL: Embedded credentials are not allowed.'
     )
   }
@@ -54,7 +54,7 @@ export const validateUrl = (url: string) => {
     .replace(/\.+$/, '')
 
   if (BLOCKED_HOSTS.has(host) || isBlockedIpLiteral(host)) {
-    throw new ValidationFailureError(
+    throw new Error(
       'Invalid URL: Access to local, private, or reserved resources is denied.'
     )
   }
