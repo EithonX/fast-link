@@ -215,20 +215,17 @@ class MediaInfo {
    * Retrieve seek position from WASM instance.
    */
   openBufferContinueGotoGet(): number {
-    let seekTo = -1;
     const seekToLow =
       this.mediainfoModuleInstance.open_buffer_continue_goto_get_lower();
     const seekToHigh =
       this.mediainfoModuleInstance.open_buffer_continue_goto_get_upper();
-    if (seekToLow === -1 && seekToHigh === -1) {
-      seekTo = -1;
-    } else if (seekToLow < 0) {
-      seekTo =
-        seekToLow + MAX_UINT32_PLUS_ONE + seekToHigh * MAX_UINT32_PLUS_ONE;
-    } else {
-      seekTo = seekToLow + seekToHigh * MAX_UINT32_PLUS_ONE;
+    if (seekToLow === -1 && seekToHigh === -1) return -1;
+    if (seekToLow < 0) {
+      return (
+        seekToLow + MAX_UINT32_PLUS_ONE + seekToHigh * MAX_UINT32_PLUS_ONE
+      );
     }
-    return seekTo;
+    return seekToLow + seekToHigh * MAX_UINT32_PLUS_ONE;
   }
 
   /**
