@@ -1,5 +1,6 @@
 import { parseContentDispositionFilename } from './filename-resolution';
-import { getEmulationHeaders } from './server-utils';
+import { safeMediaFetch } from './safe-media-fetch.server';
+import { getEmulationHeaders, validateUrl } from './server-utils';
 
 export interface FileInfo {
   filename: string;
@@ -101,6 +102,7 @@ function resolveRedirectLocation(
 async function probeManualRedirectMetadata(
   targetUrl: string,
 ): Promise<RedirectProbeResult> {
+  validateUrl(targetUrl);
   const methods: Array<'GET' | 'HEAD'> = ['GET', 'HEAD'];
 
   for (const method of methods) {
@@ -126,7 +128,8 @@ async function probeManualRedirectMetadata(
         probe.filename = locationFilename;
       }
 
-      const redirectedHead = await fetch(location, {
+      validateUrl(location);
+      const redirectedHead = await safeMediaFetch(location, {
         method: 'HEAD',
         headers: getEmulationHeaders(),
         redirect: 'follow',
@@ -221,6 +224,7 @@ async function deepProbeFileInfo(
  * resolver-style links (for example `.../0:findpath?id=...`).
  */
 export async function getFileInfo(targetUrl: string): Promise<FileInfo> {
+  validateUrl(targetUrl);
   const headers = getEmulationHeaders();
 
   let finalUrl = targetUrl;
@@ -230,7 +234,7 @@ export async function getFileInfo(targetUrl: string): Promise<FileInfo> {
 
   // First try: HEAD request to original URL (follows redirects)
   try {
-    const response = await fetch(targetUrl, {
+    const response = await safeMediaFetch(targetUrl, {
       method: 'HEAD',
       headers,
       redirect: 'follow',
@@ -256,7 +260,7 @@ export async function getFileInfo(targetUrl: string): Promise<FileInfo> {
   // Second try: If we have a redirected URL, probe it directly.
   if (finalUrl !== targetUrl && (!contentLength || !contentType)) {
     try {
-      const finalResponse = await fetch(finalUrl, {
+      const finalResponse = await safeMediaFetch(finalUrl, {
         method: 'HEAD',
         headers,
         redirect: 'manual',
@@ -283,7 +287,7 @@ export async function getFileInfo(targetUrl: string): Promise<FileInfo> {
   // Third try: Range GET often returns reliable content-range totals.
   if (!contentLength || !contentType) {
     try {
-      const getResponse = await fetch(finalUrl || targetUrl, {
+      const getResponse = await safeMediaFetch(finalUrl || targetUrl, {
         method: 'GET',
         headers: getEmulationHeaders('bytes=0-0'),
         redirect: 'follow',

@@ -5,7 +5,8 @@
  */
 
 import { formatFileSize, getFileInfo } from './file-info';
-import { getEmulationHeaders } from './server-utils';
+import { safeMediaFetch } from './safe-media-fetch.server';
+import { getEmulationHeaders, validateUrl } from './server-utils';
 
 interface FastLinkEnv {
   BOT_TOKEN?: string;
@@ -59,7 +60,7 @@ async function handleInfoRoute(url: URL): Promise<Response> {
   }
 
   try {
-    new URL(targetUrl);
+    validateUrl(targetUrl);
     const fileInfo = await getFileInfo(targetUrl);
     return new Response(JSON.stringify(fileInfo), {
       headers: {
@@ -97,6 +98,10 @@ async function handleProxyRoute(
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders });
+  }
+
   const parts = url.pathname.split('/').filter(Boolean);
   if (parts.length < 2) {
     return new Response(
@@ -109,7 +114,7 @@ async function handleProxyRoute(
     let targetLink: string;
     try {
       targetLink = atob(decodeURIComponent(parts[1]));
-      new URL(targetLink);
+      validateUrl(targetLink);
     } catch {
       return new Response('Invalid encoded URL in fast link.', {
         status: 400,
@@ -128,13 +133,16 @@ async function handleProxyRoute(
       upstreamHeaders.set('Range', range);
     }
 
-    const response = await fetch(targetLink, {
+    const response = await safeMediaFetch(targetLink, {
       method: request.method,
       headers: upstreamHeaders,
       redirect: 'follow',
     });
 
     const responseHeaders = new Headers(response.headers);
+    responseHeaders.delete('Set-Cookie');
+    responseHeaders.delete('Set-Cookie2');
+    responseHeaders.delete('Access-Control-Allow-Credentials');
 
     // Set appropriate Content-Disposition based on streaming vs download
     // For streaming (when accessed directly by players), prefer inline to avoid download prompts
@@ -142,15 +150,12 @@ async function handleProxyRoute(
       // Check if this is a streaming request (Range header present) - use inline for better player compatibility
       const isStreamingRequest = !!range;
       const disposition = isStreamingRequest ? 'inline' : 'attachment';
+      const safeFilename = filename.replace(/[\r\n"\\]/g, '_').slice(0, 240) || 'download';
+      const asciiFilename = safeFilename.replace(/[^\x20-\x7e]/g, '_');
       responseHeaders.set(
         'Content-Disposition',
-        `${disposition}; filename="${filename.replace(/"/g, '\\"')}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        `${disposition}; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`,
       );
-    }
-
-    // Ensure Accept-Ranges is set for media player seeking support
-    if (!responseHeaders.has('Accept-Ranges')) {
-      responseHeaders.set('Accept-Ranges', 'bytes');
     }
 
     // Add CORS headers
@@ -164,18 +169,8 @@ async function handleProxyRoute(
       responseHeaders.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     }
 
-    // Handle range responses
-    let status = response.status;
-    if (
-      range &&
-      response.status === 200 &&
-      response.headers.has('content-range')
-    ) {
-      status = 206;
-    }
-
     const body = request.method === 'HEAD' ? null : response.body;
-    return new Response(body, { status, headers: responseHeaders });
+    return new Response(body, { status: response.status, headers: responseHeaders });
   } catch (err) {
     console.error('Proxy/Download error:', err);
     return new Response('Failed to fetch the target link through proxy.', {
