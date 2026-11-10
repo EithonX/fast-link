@@ -27,53 +27,67 @@ export function MediaView({ data, url }: MediaViewProps) {
   const [isTextView, setIsTextView] = useState(false);
   const [showOriginalTitles, setShowOriginalTitles] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [lazyText, setLazyText] = useState<string | null>(null);
+  const [lazyText, setLazyText] = useState<{
+    url: string;
+    text: string;
+  } | null>(null);
   const [isFetchingText, setIsFetchingText] = useState(false);
+  const [textError, setTextError] = useState<string | null>(null);
+  const [retryTextVersion, setRetryTextVersion] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const currentLazyText = lazyText?.url === url ? lazyText.text : null;
 
-  // Lazy load text view on demand
+  // Fetch text only on demand. Loading state is deliberately not a dependency:
+  // toggling that state must not abort the request it just started.
   useEffect(() => {
-    if (isTextView && !data.text && !lazyText && !isFetchingText) {
-      let cancelled = false;
-      const fetchText = async () => {
-        setIsFetchingText(true);
-        try {
-          const response = await fetch(
-            `/resource/analyze?url=${encodeURIComponent(url)}&format=text`,
-          );
-          if (response.ok) {
-            const data = (await response.json()) as {
-              results?: { text?: string };
-            };
-            if (data.results?.text && !cancelled) {
-              setLazyText(data.results.text);
-            } else if (!cancelled) {
-              setLazyText('No text data available.');
-            }
-          } else if (!cancelled) {
-            setLazyText('Failed to load text view.');
-          }
-        } catch (error) {
-          console.error('Failed to fetch text view:', error);
-          if (!cancelled) {
-            setLazyText('Error loading text view.');
-          }
-        } finally {
-          if (!cancelled) {
-            setIsFetchingText(false);
-          }
-        }
-      };
-
-      void fetchText();
-
-      return () => {
-        cancelled = true;
-      };
+    if (!isTextView || data.text || currentLazyText !== null || textError) {
+      return undefined;
     }
 
-    return undefined;
-  }, [isTextView, data.text, lazyText, isFetchingText, url]);
+    const controller = new AbortController();
+    setIsFetchingText(true);
+
+    const fetchText = async () => {
+      try {
+        const response = await fetch(
+          '/resource/analyze?url=' + encodeURIComponent(url) + '&format=text',
+          { signal: controller.signal },
+        );
+
+        if (!response.ok) {
+          throw new Error('The analyzer could not provide a text report.');
+        }
+
+        const payload = (await response.json()) as {
+          results?: { text?: string };
+        };
+        if (!payload.results?.text) {
+          throw new Error('No text report was returned.');
+        }
+
+        if (!controller.signal.aborted) {
+          setLazyText({ url, text: payload.results.text });
+          setTextError(null);
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setTextError('Unable to load the text report. Try again.');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsFetchingText(false);
+        }
+      }
+    };
+    void fetchText();
+
+    return () => controller.abort();
+  }, [isTextView, data.text, currentLazyText, textError, retryTextVersion, url]);
+
+  const retryTextLoad = () => {
+    setTextError(null);
+    setRetryTextVersion((version) => version + 1);
+  };
 
   // Handle Escape key to exit full screen
   useEffect(() => {
@@ -124,9 +138,9 @@ export function MediaView({ data, url }: MediaViewProps) {
   const fullData = useMemo(() => {
     return {
       ...data,
-      text: data.text || lazyText || (isFetchingText ? '' : ''),
+      text: data.text || currentLazyText || '',
     };
-  }, [data, lazyText, isFetchingText]);
+  }, [data, currentLazyText]);
 
   if (!parsedData) {
     return (
@@ -238,6 +252,20 @@ export function MediaView({ data, url }: MediaViewProps) {
                         <Skeleton className="h-3 w-3/4 bg-zinc-200 dark:bg-zinc-800" />
                       </div>
                     </div>
+                  </motion.div>
+                ) : textError ? (
+                  <motion.div
+                    key="text-error"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex min-h-[200px] flex-col items-center justify-center gap-3 p-6 text-center"
+                    role="status"
+                  >
+                    <p className="text-muted-foreground text-sm">{textError}</p>
+                    <Button type="button" variant="outline" size="sm" onClick={retryTextLoad}>
+                      Retry text report
+                    </Button>
                   </motion.div>
                 ) : (
                   <motion.pre
