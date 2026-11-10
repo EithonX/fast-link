@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "mediapeek-analyzer",
+  "name": "fastlink-analyzer",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-13",
   "compatibility_flags": ["nodejs_compat"],
