@@ -258,6 +258,47 @@ const extractArchivePrefix = async (
   return null;
 };
 
+// A source that ignores Range may send the entire file. Never materialize it
+// in memory just to inspect an archive tail or a MediaInfo seek span.
+const readResponseWithinLimit = async (
+  response: Response,
+  maxBytes: number,
+): Promise<Uint8Array> => {
+  const reader = response.body?.getReader();
+  if (!reader) return new Uint8Array(0);
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let completed = false;
+
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) {
+        completed = true;
+        break;
+      }
+
+      total += next.value.byteLength;
+      if (total > maxBytes) {
+        throw new Error('Media source returned more bytes than requested.');
+      }
+      chunks.push(next.value);
+    }
+
+    const data = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      data.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return data;
+  } finally {
+    if (!completed) await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+};
+
 const fetchZipTailBuffer = async (
   url: string,
   totalSize: number,
@@ -274,10 +315,31 @@ const fetchZipTailBuffer = async (
     redirect: 'follow',
   });
   if (response.status !== 200 && response.status !== 206) {
+    void response.body?.cancel();
     return null;
   }
 
-  return new Uint8Array(await response.arrayBuffer());
+  // A 200 response for a nonzero tail offset is the *start* of the full file,
+  // not the requested tail. Do not misidentify archive contents from it.
+  if (response.status === 200 && start > 0) {
+    void response.body?.cancel();
+    return null;
+  }
+
+  const contentRange = response.headers.get('content-range');
+  if (response.status === 206 && contentRange) {
+    const match = /^bytes (\d+)-(\d+)\/(?:\d+|\*)$/i.exec(contentRange);
+    if (!match || Number(match[1]) !== start) {
+      void response.body?.cancel();
+      return null;
+    }
+  }
+
+  try {
+    return await readResponseWithinLimit(response, ZIP_TAIL_INSPECTION_BYTES);
+  } catch {
+    return null;
+  }
 };
 
 const createRemoteByteSource = (
@@ -366,7 +428,26 @@ const createRemoteByteSource = (
     });
     assertByteFetchStatus(response);
 
-    const body = new Uint8Array(await response.arrayBuffer());
+    const body = await readResponseWithinLimit(response, SAFE_LIMIT);
+
+    if (response.status === 206) {
+      const contentRange = response.headers.get('content-range');
+      if (contentRange) {
+        const match = /^bytes (\d+)-(\d+)\/(?:\d+|\*)$/i.exec(contentRange);
+        if (!match || Number(match[1]) !== spanStart) {
+          throw new Error('Origin returned a shifted byte range.');
+        }
+      }
+
+      if (
+        fileSize !== undefined &&
+        body.byteLength < spanEnd - spanStart &&
+        spanEnd < fileSize
+      ) {
+        throw new Error('Origin returned fewer bytes than requested.');
+      }
+    }
+
     diagnostics.seekFetchCount = (diagnostics.seekFetchCount ?? 0) + 1;
     diagnostics.seekBytesFetched =
       (diagnostics.seekBytesFetched ?? 0) + body.byteLength;
