@@ -27,6 +27,7 @@ jobs:
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm ci --ignore-scripts --no-audit --no-fund
           npm ls eslint @eslint/js typescript motion
+          npx eslint eslint.config.js --fix
           npm run lint
           npm run typecheck
           npx vitest run
@@ -34,7 +35,7 @@ jobs:
       - name: Commit only dependency manifests on passing checks
         run: |
           set -euo pipefail
-          git add -- package.json package-lock.json
+          git add -- package.json package-lock.json eslint.config.js
           if git diff --cached --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
