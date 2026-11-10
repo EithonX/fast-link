@@ -57,6 +57,8 @@ interface FastLinkState {
   url: string;
 }
 
+const COPYRIGHT_YEAR = new Date().getFullYear();
+
 const initialState: FastLinkState = {
   fileInfo: null,
   fastLink: '',
@@ -427,12 +429,16 @@ export function FastLinkForm() {
       <main className="container mx-auto flex flex-1 flex-col items-center px-4 py-8">
         <div className="w-full max-w-3xl space-y-8">
           {/* Hero */}
-          <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Fast Download Links
+          <div className="mx-auto max-w-2xl space-y-3 text-center">
+            <p className="text-muted-foreground text-xs font-semibold tracking-[0.18em] uppercase">
+              FastLink / Direct downloads
+            </p>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              One file URL. One shareable link.
             </h1>
-            <p className="text-muted-foreground text-sm">
-              Generate accelerated downloads through Cloudflare with media info
+            <p className="text-muted-foreground mx-auto max-w-lg text-sm leading-6">
+              Create a direct download link instantly. File information and
+              detailed media analysis appear separately when available.
             </p>
           </div>
 
@@ -442,49 +448,18 @@ export function FastLinkForm() {
               e.preventDefault();
               handleSubmit();
             }}
-            className="mx-auto max-w-xl space-y-4"
+            className="mx-auto max-w-2xl space-y-3"
           >
-            {/* Clipboard Suggestion */}
-            <AnimatePresence>
-              {clipboardUrl && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInputUrl(clipboardUrl);
-                      if (inputRef.current) {
-                        inputRef.current.value = clipboardUrl;
-                      }
-                      handleSubmit(clipboardUrl);
-                      setClipboardUrl(null);
-                    }}
-                    className="hover:bg-muted/50 group flex w-full max-w-full cursor-pointer flex-col items-start gap-1 rounded-xl border px-4 py-3 text-left transition-colors"
-                  >
-                    <span className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-                      Link from Clipboard
-                    </span>
-                    <div className="flex w-full items-center justify-between gap-2">
-                      <span className="line-clamp-2 text-sm font-medium break-all">
-                        {clipboardUrl}
-                      </span>
-                      <ArrowRight className="text-muted-foreground group-hover:text-foreground h-4 w-4 shrink-0 -rotate-45 transition-colors group-hover:rotate-0" />
-                    </div>
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <label htmlFor="fastlink-url" className="block text-sm font-medium">
+              Direct file URL
+            </label>
 
             {/* Input */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap gap-2">
+              <div className="relative min-w-0 flex-1 basis-full sm:basis-auto">
                 <input
                   ref={inputRef}
+                  id="fastlink-url"
                   name="url"
                   type="url"
                   value={inputUrl}
@@ -492,7 +467,7 @@ export function FastLinkForm() {
                   placeholder="https://example.com/file.mp4"
                   autoComplete="off"
                   required
-                  onFocus={checkClipboard}
+                  aria-invalid={Boolean(inputUrl && !isValidUrl)}
                   className={cn(
                     'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-11 w-full rounded-lg border px-4 pr-10 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
                     inputUrl &&
@@ -504,8 +479,10 @@ export function FastLinkForm() {
                   <button
                     type="button"
                     onClick={() => {
+                      stopPreviousOperation();
                       setInputUrl('');
                       setState(initialState);
+                      setCopied(false);
                       if (inputRef.current) {
                         inputRef.current.value = '';
                         inputRef.current.focus();
@@ -513,6 +490,7 @@ export function FastLinkForm() {
                     }}
                     className="text-muted-foreground hover:text-foreground hover:bg-muted absolute top-1/2 right-3 -translate-y-1/2 rounded-sm p-0.5 transition-colors"
                     title="Clear URL"
+                    aria-label="Clear URL"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -524,47 +502,32 @@ export function FastLinkForm() {
                 size="icon"
                 className="h-11 w-11 shrink-0"
                 onClick={handlePaste}
+                aria-label="Paste URL from clipboard"
+                title="Paste URL from clipboard"
               >
                 <ClipboardIcon className="h-4 w-4" />
               </Button>
               <Button
                 type="submit"
-                size="icon"
-                className="h-11 w-11 shrink-0"
-                disabled={state.isGenerating || (!!inputUrl && !isValidUrl)}
+                className="h-11 grow gap-2 px-5 sm:grow-0"
+                disabled={!isValidUrl}
               >
-                {state.isGenerating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowRight className="h-4 w-4" />
-                )}
+                <ArrowRight className="h-4 w-4" />
+                Generate link
               </Button>
             </div>
           </form>
 
           {/* Error */}
-          {state.error && !state.isGenerating && (
+          {state.error && (
             <Alert variant="destructive" className="mx-auto max-w-xl">
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>{state.error}</AlertDescription>
             </Alert>
           )}
 
-          {/* Loading */}
-          {state.isGenerating && (
-            <Card className="mx-auto max-w-xl">
-              <CardContent className="space-y-4 pt-6">
-                <div className="bg-muted h-12 animate-pulse rounded-lg" />
-                <div className="flex gap-2">
-                  <div className="bg-muted h-10 flex-1 animate-pulse rounded" />
-                  <div className="bg-muted h-10 w-20 animate-pulse rounded" />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Results */}
-          {state.fileInfo && !state.isGenerating && (
+          {state.fileInfo && (
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -602,6 +565,17 @@ export function FastLinkForm() {
                       </div>
                     </div>
                   </div>
+
+                  {state.isCheckingInfo && (
+                    <p role="status" className="text-muted-foreground text-xs">
+                      Checking file details…
+                    </p>
+                  )}
+                  {state.metadataMessage && (
+                    <p role="status" className="text-muted-foreground text-xs">
+                      {state.metadataMessage}
+                    </p>
+                  )}
 
                   {/* Fast Link */}
                   <div className="space-y-3 pt-2">
@@ -662,7 +636,21 @@ export function FastLinkForm() {
                   {state.isAnalyzing ? (
                     <div className="text-muted-foreground flex items-center justify-center gap-2 pt-2 text-xs">
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      Analyzing media...
+                      Inspecting media details…
+                      <button
+                        type="button"
+                        onClick={cancelAnalysis}
+                        className="text-foreground underline underline-offset-4"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : state.analysisError ? (
+                    <div role="status" className="text-muted-foreground flex flex-wrap items-center justify-center gap-3 pt-2 text-xs">
+                      <span>{state.analysisError}</span>
+                      <Button variant="outline" size="sm" onClick={retryAnalysis}>
+                        Retry analysis
+                      </Button>
                     </div>
                   ) : mediaSummary ? (
                     <div className="space-y-3 pt-2">
@@ -726,7 +714,7 @@ export function FastLinkForm() {
       <footer className="border-t py-6">
         <div className="text-muted-foreground/60 hover:text-muted-foreground container mx-auto flex flex-col items-center justify-center gap-1 text-xs transition-colors sm:flex-row sm:gap-1.5">
           <div className="flex items-center gap-1.5">
-            <span>© {new Date().getFullYear()} FastLink</span>
+            <span>© {COPYRIGHT_YEAR} FastLink</span>
             <span>•</span>
             <span>
               Made by{' '}
@@ -747,7 +735,7 @@ export function FastLinkForm() {
             <span>
               Inspired by{' '}
               <a
-                href="https://github.com/luminalreason/mediapeek/"
+                href="https://github.com/DG02002/mediapeek"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-foreground/80 hover:text-foreground font-medium underline-offset-4 transition-colors hover:underline"
