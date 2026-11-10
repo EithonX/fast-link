@@ -41,9 +41,13 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
   const { history, removeFromHistory, clearHistory } = useHistory();
   const [open, setOpen] = useState(false);
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success('Link copied to clipboard');
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Link copied to clipboard');
+    } catch {
+      toast.error('Clipboard access was denied. Copy the link from the generator.');
+    }
   };
 
   return (
@@ -57,7 +61,7 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
       <SheetContent className="flex h-full w-full flex-col sm:max-w-md">
         <SheetHeader>
           <SheetTitle>History</SheetTitle>
-          <SheetDescription>Your recent downloads.</SheetDescription>
+          <SheetDescription>Links generated in this browser, saved locally.</SheetDescription>
         </SheetHeader>
 
         {history.length === 0 ? (
@@ -93,7 +97,7 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-muted-foreground hover:text-destructive absolute top-2 right-2 h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
+                        className="text-muted-foreground hover:text-destructive absolute top-2 right-2 h-8 w-8 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
                         onClick={() => removeFromHistory(item.id)}
                         title="Remove from history"
                       >
@@ -137,7 +141,7 @@ export function HistorySheet({ onSelect }: HistorySheetProps) {
                         variant="outline"
                         size="sm"
                         className="h-8 flex-1 gap-1.5 text-xs"
-                        onClick={() => copyToClipboard(item.fastLink)}
+                        onClick={() => void copyToClipboard(item.fastLink)}
                       >
                         <Copy className="h-3.5 w-3.5" />
                         Copy

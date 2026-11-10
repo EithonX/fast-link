@@ -17,8 +17,8 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { useMemo, useRef, useState } from 'react';
+import { motion } from 'motion/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { HistorySheet } from '~/components/history-sheet';
 import { MediaView } from '~/components/media-view';
@@ -34,6 +34,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { useHapticFeedback } from '~/hooks/use-haptic';
 import { type HistoryItem, useHistory } from '~/hooks/use-history';
+import { createFastLink, normalizeDirectUrl, suggestFilename } from '~/lib/fastlink-url';
 import { cn } from '~/lib/utils';
 
 import { ModeToggle } from './mode-toggle';
@@ -49,18 +50,24 @@ interface FastLinkState {
   fastLink: string;
   mediaResults: Record<string, string> | null;
   error: string | null;
-  isGenerating: boolean;
+  isCheckingInfo: boolean;
   isAnalyzing: boolean;
+  analysisError: string | null;
+  metadataMessage: string | null;
   url: string;
 }
+
+const COPYRIGHT_YEAR = new Date().getFullYear();
 
 const initialState: FastLinkState = {
   fileInfo: null,
   fastLink: '',
   mediaResults: null,
   error: null,
-  isGenerating: false,
+  isCheckingInfo: false,
   isAnalyzing: false,
+  analysisError: null,
+  metadataMessage: null,
   url: '',
 };
 
@@ -86,118 +93,203 @@ export function FastLinkForm() {
   const [inputUrl, setInputUrl] = useState('');
   const [state, setState] = useState<FastLinkState>(initialState);
   const [copied, setCopied] = useState(false);
-  const [clipboardUrl, setClipboardUrl] = useState<string | null>(null);
   const { addToHistory } = useHistory();
 
   const isValidUrl = useMemo(() => {
     if (!inputUrl) return false;
     try {
-      const u = new URL(inputUrl);
-      return u.protocol === 'http:' || u.protocol === 'https:';
+      return Boolean(normalizeDirectUrl(inputUrl));
     } catch {
       return false;
     }
   }, [inputUrl]);
 
-  const handleSubmit = async (urlToAnalyze?: string) => {
-    const url = urlToAnalyze || inputUrl.trim() || '';
+  const currentOperation = useRef<{
+    id: number;
+    metadata: AbortController;
+    analysis: AbortController;
+  } | null>(null);
+  const nextOperationId = useRef(0);
 
-    if (!url) {
-      setState((s) => ({ ...s, error: 'Please enter a valid URL' }));
-      return;
-    }
+  useEffect(() => {
+    return () => {
+      currentOperation.current?.metadata.abort();
+      currentOperation.current?.analysis.abort();
+    };
+  }, []);
 
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      setState((s) => ({
-        ...s,
-        error: 'URL must start with http:// or https://',
-      }));
-      return;
-    }
+  const stopPreviousOperation = () => {
+    currentOperation.current?.metadata.abort();
+    currentOperation.current?.analysis.abort();
+    currentOperation.current = null;
+    nextOperationId.current += 1;
+  };
 
-    setClipboardUrl(null);
-
-    setState({
-      fileInfo: null,
-      fastLink: '',
-      mediaResults: null,
-      error: null,
-      isGenerating: true,
-      isAnalyzing: false,
-      url,
-    });
-
+  const fetchFileInfo = async (
+    url: string,
+    operationId: number,
+    signal: AbortSignal,
+  ) => {
     try {
-      const infoResponse = await fetch(`/info?url=${encodeURIComponent(url)}`);
-      const infoData = (await infoResponse.json()) as FileInfo & {
+      const response = await fetch('/info?url=' + encodeURIComponent(url), {
+        signal,
+      });
+      const info = (await response.json()) as Partial<FileInfo> & {
         error?: string;
       };
-
-      if (!infoResponse.ok || infoData.error) {
-        throw new Error(infoData.error || 'Failed to fetch file info');
+      if (!response.ok || info.error) {
+        throw new Error('File metadata unavailable.');
       }
+      if (currentOperation.current?.id !== operationId) return;
 
-      const encodedUrl = btoa(url);
-      const fastLink =
-        window.location.origin +
-        '/p/' +
-        encodeURIComponent(encodedUrl) +
-        '/' +
-        encodeURIComponent(infoData.filename);
+      const filename =
+        typeof info.filename === 'string' && info.filename.trim()
+          ? info.filename
+          : suggestFilename(url);
+      const size =
+        typeof info.size === 'number' && Number.isFinite(info.size) && info.size > 0
+          ? info.size
+          : 0;
+      const type = typeof info.type === 'string' ? info.type : '';
+      const fastLink = createFastLink(window.location.origin, url, filename);
 
-      setState((s) => ({
-        ...s,
-        fileInfo: {
-          filename: infoData.filename,
-          size: infoData.size,
-          type: infoData.type,
-        },
+      setState((state) => ({
+        ...state,
+        fileInfo: { filename, size, type },
         fastLink,
-        isGenerating: false,
-        isAnalyzing: true,
+        isCheckingInfo: false,
+        metadataMessage: null,
       }));
-
       addToHistory({
-        url: url,
-        fastLink: fastLink,
-        filename: infoData.filename,
-        fileSize: formatFileSize(infoData.size),
-        sizeBytes: infoData.size,
+        url,
+        fastLink,
+        filename,
+        fileSize: formatFileSize(size),
+        sizeBytes: size,
       });
-
-      triggerSuccess();
-      fetchMediaInfo(url);
-    } catch (err) {
-      setState((s) => ({
-        ...s,
-        isGenerating: false,
-        isAnalyzing: false,
-        error: err instanceof Error ? err.message : 'Failed to generate link',
+    } catch {
+      if (signal.aborted || currentOperation.current?.id !== operationId) return;
+      setState((state) => ({
+        ...state,
+        isCheckingInfo: false,
+        metadataMessage:
+          'File details could not be verified. The link is ready, but the source may refuse downloads.',
       }));
-      triggerError();
     }
   };
 
-  const fetchMediaInfo = async (url: string) => {
+  const fetchMediaInfo = async (
+    url: string,
+    operationId: number,
+    signal: AbortSignal,
+  ) => {
     try {
-      const analyzeResponse = await fetch(
-        `/resource/analyze?url=${encodeURIComponent(url)}&format=object`,
+      const response = await fetch(
+        '/resource/analyze?url=' + encodeURIComponent(url) + '&format=object',
+        { signal },
       );
-      if (analyzeResponse.ok) {
-        const analyzeData = (await analyzeResponse.json()) as {
-          results?: Record<string, string>;
-        };
-        setState((s) => ({
-          ...s,
-          mediaResults: analyzeData.results || null,
-          isAnalyzing: false,
-        }));
-      } else {
-        setState((s) => ({ ...s, isAnalyzing: false }));
+      if (!response.ok) {
+        throw new Error('Media analysis is unavailable. Your download link is still ready.');
       }
-    } catch {
-      setState((s) => ({ ...s, isAnalyzing: false }));
+
+      const data = (await response.json()) as {
+        results?: Record<string, string>;
+      };
+      if (!data.results?.json) {
+        throw new Error('No media details were returned. The download link is still ready.');
+      }
+      if (currentOperation.current?.id !== operationId) return;
+
+      setState((state) => ({
+        ...state,
+        mediaResults: data.results || null,
+        isAnalyzing: false,
+        analysisError: null,
+      }));
+    } catch (error) {
+      if (signal.aborted || currentOperation.current?.id !== operationId) return;
+      setState((state) => ({
+        ...state,
+        isAnalyzing: false,
+        analysisError:
+          error instanceof Error
+            ? error.message
+            : 'Media analysis is unavailable. The download link is still ready.',
+      }));
     }
+  };
+
+  const handleSubmit = (requestedUrl?: string) => {
+    let url: string;
+    try {
+      url = normalizeDirectUrl(requestedUrl || inputUrl);
+    } catch {
+      setState((state) => ({
+        ...state,
+        error: 'Enter a valid HTTP or HTTPS link without embedded credentials.',
+      }));
+      triggerError();
+      return;
+    }
+
+    stopPreviousOperation();
+    const operationId = ++nextOperationId.current;
+    const metadata = new AbortController();
+    const analysis = new AbortController();
+    currentOperation.current = { id: operationId, metadata, analysis };
+
+    const filename = suggestFilename(url);
+    const fastLink = createFastLink(window.location.origin, url, filename);
+
+    setInputUrl(url);
+    setCopied(false);
+    setState({
+      fileInfo: { filename, size: 0, type: '' },
+      fastLink,
+      mediaResults: null,
+      error: null,
+      isCheckingInfo: true,
+      isAnalyzing: true,
+      analysisError: null,
+      metadataMessage: null,
+      url,
+    });
+    addToHistory({
+      url,
+      fastLink,
+      filename,
+      fileSize: formatFileSize(0),
+      sizeBytes: 0,
+    });
+    triggerSuccess();
+
+    // Link generation never waits for the source or the media analyzer.
+    void fetchFileInfo(url, operationId, metadata.signal);
+    void fetchMediaInfo(url, operationId, analysis.signal);
+  };
+
+  const cancelAnalysis = () => {
+    currentOperation.current?.analysis.abort();
+    setState((state) => ({
+      ...state,
+      isAnalyzing: false,
+      analysisError: 'Analysis cancelled. Your download link is still ready.',
+    }));
+  };
+
+  const retryAnalysis = () => {
+    const operation = currentOperation.current;
+    if (!operation || !state.url || state.isAnalyzing) return;
+
+    operation.analysis.abort();
+    const analysis = new AbortController();
+    operation.analysis = analysis;
+    setState((state) => ({
+      ...state,
+      isAnalyzing: true,
+      analysisError: null,
+    }));
+    void fetchMediaInfo(state.url, operation.id, analysis.signal);
   };
 
   const copyToClipboard = async () => {
@@ -207,6 +299,10 @@ export function FastLinkForm() {
       triggerSuccess();
       setTimeout(() => setCopied(false), 2000);
     } catch {
+      setState((state) => ({
+        ...state,
+        error: 'Clipboard access was denied. Select and copy the link manually.',
+      }));
       triggerError();
     }
   };
@@ -214,24 +310,20 @@ export function FastLinkForm() {
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      if (text) {
-        setInputUrl(text);
-        if (inputRef.current) inputRef.current.value = text;
+      if (text.trim()) {
+        setInputUrl(text.trim());
+        setState((state) => ({ ...state, error: null }));
+        inputRef.current?.focus();
         triggerSuccess();
+      } else {
+        setState((state) => ({ ...state, error: 'Clipboard is empty.' }));
       }
     } catch {
+      setState((state) => ({
+        ...state,
+        error: 'Clipboard permission was denied. Paste the link manually.',
+      }));
       triggerError();
-    }
-  };
-
-  const checkClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text && text.startsWith('http') && text !== state.url) {
-        setClipboardUrl(text);
-      }
-    } catch {
-      // Clipboard access denied
     }
   };
 
@@ -288,6 +380,12 @@ export function FastLinkForm() {
   const mediaSummary = getMediaSummary();
 
   const handleRestore = (item: HistoryItem) => {
+    stopPreviousOperation();
+    const operationId = ++nextOperationId.current;
+    const metadata = new AbortController();
+    const analysis = new AbortController();
+    currentOperation.current = { id: operationId, metadata, analysis };
+
     setState({
       ...initialState,
       url: item.url,
@@ -295,20 +393,14 @@ export function FastLinkForm() {
       fileInfo: {
         filename: item.filename,
         size: item.sizeBytes || 0,
-        type: 'unknown',
+        type: '',
       },
-      isGenerating: false,
-      isAnalyzing: true, // Re-trigger analysis
-      mediaResults: null,
+      isAnalyzing: true,
     });
-
-    if (inputRef.current) {
-      inputRef.current.value = item.url;
-    }
     setInputUrl(item.url);
-
+    setCopied(false);
     triggerSuccess();
-    fetchMediaInfo(item.url);
+    void fetchMediaInfo(item.url, operationId, analysis.signal);
   };
 
   return (
@@ -337,12 +429,16 @@ export function FastLinkForm() {
       <main className="container mx-auto flex flex-1 flex-col items-center px-4 py-8">
         <div className="w-full max-w-3xl space-y-8">
           {/* Hero */}
-          <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Fast Download Links
+          <div className="mx-auto max-w-2xl space-y-3 text-center">
+            <p className="text-muted-foreground text-xs font-semibold tracking-[0.18em] uppercase">
+              FastLink / Direct downloads
+            </p>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              One file URL. One shareable link.
             </h1>
-            <p className="text-muted-foreground text-sm">
-              Generate accelerated downloads through Cloudflare with media info
+            <p className="text-muted-foreground mx-auto max-w-lg text-sm leading-6">
+              Create a direct download link instantly. File information and
+              detailed media analysis appear separately when available.
             </p>
           </div>
 
@@ -352,49 +448,18 @@ export function FastLinkForm() {
               e.preventDefault();
               handleSubmit();
             }}
-            className="mx-auto max-w-xl space-y-4"
+            className="mx-auto max-w-2xl space-y-3"
           >
-            {/* Clipboard Suggestion */}
-            <AnimatePresence>
-              {clipboardUrl && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInputUrl(clipboardUrl);
-                      if (inputRef.current) {
-                        inputRef.current.value = clipboardUrl;
-                      }
-                      handleSubmit(clipboardUrl);
-                      setClipboardUrl(null);
-                    }}
-                    className="hover:bg-muted/50 group flex w-full max-w-full cursor-pointer flex-col items-start gap-1 rounded-xl border px-4 py-3 text-left transition-colors"
-                  >
-                    <span className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-                      Link from Clipboard
-                    </span>
-                    <div className="flex w-full items-center justify-between gap-2">
-                      <span className="line-clamp-2 text-sm font-medium break-all">
-                        {clipboardUrl}
-                      </span>
-                      <ArrowRight className="text-muted-foreground group-hover:text-foreground h-4 w-4 shrink-0 -rotate-45 transition-colors group-hover:rotate-0" />
-                    </div>
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <label htmlFor="fastlink-url" className="block text-sm font-medium">
+              Direct file URL
+            </label>
 
             {/* Input */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap gap-2">
+              <div className="relative min-w-0 flex-1 basis-full sm:basis-auto">
                 <input
                   ref={inputRef}
+                  id="fastlink-url"
                   name="url"
                   type="url"
                   value={inputUrl}
@@ -402,7 +467,7 @@ export function FastLinkForm() {
                   placeholder="https://example.com/file.mp4"
                   autoComplete="off"
                   required
-                  onFocus={checkClipboard}
+                  aria-invalid={Boolean(inputUrl && !isValidUrl)}
                   className={cn(
                     'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-11 w-full rounded-lg border px-4 pr-10 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
                     inputUrl &&
@@ -414,8 +479,10 @@ export function FastLinkForm() {
                   <button
                     type="button"
                     onClick={() => {
+                      stopPreviousOperation();
                       setInputUrl('');
                       setState(initialState);
+                      setCopied(false);
                       if (inputRef.current) {
                         inputRef.current.value = '';
                         inputRef.current.focus();
@@ -423,6 +490,7 @@ export function FastLinkForm() {
                     }}
                     className="text-muted-foreground hover:text-foreground hover:bg-muted absolute top-1/2 right-3 -translate-y-1/2 rounded-sm p-0.5 transition-colors"
                     title="Clear URL"
+                    aria-label="Clear URL"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -434,47 +502,32 @@ export function FastLinkForm() {
                 size="icon"
                 className="h-11 w-11 shrink-0"
                 onClick={handlePaste}
+                aria-label="Paste URL from clipboard"
+                title="Paste URL from clipboard"
               >
                 <ClipboardIcon className="h-4 w-4" />
               </Button>
               <Button
                 type="submit"
-                size="icon"
-                className="h-11 w-11 shrink-0"
-                disabled={state.isGenerating || (!!inputUrl && !isValidUrl)}
+                className="h-11 grow gap-2 px-5 sm:grow-0"
+                disabled={!isValidUrl}
               >
-                {state.isGenerating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowRight className="h-4 w-4" />
-                )}
+                <ArrowRight className="h-4 w-4" />
+                Generate link
               </Button>
             </div>
           </form>
 
           {/* Error */}
-          {state.error && !state.isGenerating && (
+          {state.error && (
             <Alert variant="destructive" className="mx-auto max-w-xl">
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>{state.error}</AlertDescription>
             </Alert>
           )}
 
-          {/* Loading */}
-          {state.isGenerating && (
-            <Card className="mx-auto max-w-xl">
-              <CardContent className="space-y-4 pt-6">
-                <div className="bg-muted h-12 animate-pulse rounded-lg" />
-                <div className="flex gap-2">
-                  <div className="bg-muted h-10 flex-1 animate-pulse rounded" />
-                  <div className="bg-muted h-10 w-20 animate-pulse rounded" />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Results */}
-          {state.fileInfo && !state.isGenerating && (
+          {state.fileInfo && (
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -512,6 +565,17 @@ export function FastLinkForm() {
                       </div>
                     </div>
                   </div>
+
+                  {state.isCheckingInfo && (
+                    <p role="status" className="text-muted-foreground text-xs">
+                      Checking file details…
+                    </p>
+                  )}
+                  {state.metadataMessage && (
+                    <p role="status" className="text-muted-foreground text-xs">
+                      {state.metadataMessage}
+                    </p>
+                  )}
 
                   {/* Fast Link */}
                   <div className="space-y-3 pt-2">
@@ -572,7 +636,21 @@ export function FastLinkForm() {
                   {state.isAnalyzing ? (
                     <div className="text-muted-foreground flex items-center justify-center gap-2 pt-2 text-xs">
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      Analyzing media...
+                      Inspecting media details…
+                      <button
+                        type="button"
+                        onClick={cancelAnalysis}
+                        className="text-foreground underline underline-offset-4"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : state.analysisError ? (
+                    <div role="status" className="text-muted-foreground flex flex-wrap items-center justify-center gap-3 pt-2 text-xs">
+                      <span>{state.analysisError}</span>
+                      <Button variant="outline" size="sm" onClick={retryAnalysis}>
+                        Retry analysis
+                      </Button>
                     </div>
                   ) : mediaSummary ? (
                     <div className="space-y-3 pt-2">
@@ -636,7 +714,7 @@ export function FastLinkForm() {
       <footer className="border-t py-6">
         <div className="text-muted-foreground/60 hover:text-muted-foreground container mx-auto flex flex-col items-center justify-center gap-1 text-xs transition-colors sm:flex-row sm:gap-1.5">
           <div className="flex items-center gap-1.5">
-            <span>© {new Date().getFullYear()} FastLink</span>
+            <span>© {COPYRIGHT_YEAR} FastLink</span>
             <span>•</span>
             <span>
               Made by{' '}
@@ -657,7 +735,7 @@ export function FastLinkForm() {
             <span>
               Inspired by{' '}
               <a
-                href="https://github.com/luminalreason/mediapeek/"
+                href="https://github.com/DG02002/mediapeek"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-foreground/80 hover:text-foreground font-medium underline-offset-4 transition-colors hover:underline"
